@@ -1,0 +1,41 @@
+[project]
+name = "us-accidents-ml"
+version = "0.1.0"
+description = "Accident Severity Intelligence — predykcja powagi wypadku (US Accidents): cechy tabelaryczne vs opis tekstowy vs LLM. Projekt koncowy kursu AI & ML Engineering (SAGES/Kodolamacz)."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Marcin Proch" }]
+dependencies = [
+    "pandas>=2.2",
+    "pyarrow>=16",
+    "scikit-learn>=1.5",
+    "xgboost>=2.1",
+    "optuna>=3.6",
+    "mlflow>=2.14",
+    "matplotlib>=3.9",
+    "seaborn>=0.13",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.5", "jupyterlab>=4.2", "ipykernel>=6.29"]
+nlp = ["sentence-transformers>=3.0"]
+llm = ["groq>=0.9"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

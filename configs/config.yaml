@@ -1,0 +1,16 @@
+# Accident Severity Intelligence — konfiguracja
+paths:
+  raw_csv: dane/US_Accidents_March23.csv   # pobierz z Kaggle (sobhanmoosavi/us-accidents)
+  processed_dir: dane/processed
+  models_dir: models
+
+data:
+  target: Severity
+  # próbka do szybkich iteracji EDA/treningu; ustaw null, by czytać całość (7,7 mln wierszy)
+  sample_rows: 500000
+  random_state: 42
+  test_size: 0.2
+
+mlflow:
+  tracking_uri: mlruns
+  experiment: severity-tabular
