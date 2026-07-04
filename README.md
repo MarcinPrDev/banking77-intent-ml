@@ -172,6 +172,13 @@ Hugging Face Space (Streamlit + małe modele) po zgaszeniu GKE.
 - [ ] W7: API produkcyjne + `make demo` (+ Streamlit?)
 - [ ] W8: CI/CD→Cloud Run (+ GKE?) + dokumentacja + wysyłka ≤ 24.08
 
+## Tooling — współpraca z AI
+
+Projekt rozwijany z asystą **Claude (Anthropic)** w roli pair-programmera i reviewera
+(plan, szkielet, code review, debugowanie). Decyzje projektowe, analiza, modelowanie
+i wnioski — autor. Commity współtworzone z asystentem są oznaczone stopką
+`Co-Authored-By` w historii git; ADR-y w `docs/adr/` pisane samodzielnie.
+
 ## Licencja
 
 Kod: MIT. Dane US Accidents: CC BY-NC-SA 4.0 (Sobhan Moosavi) — dane poza repo, w repo tylko
