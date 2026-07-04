@@ -2,6 +2,7 @@
 paths:
   raw_csv: dane/US_Accidents_March23.csv   # pobierz z Kaggle (sobhanmoosavi/us-accidents)
   processed_dir: dane/processed
+  splits_dir: dane/splits                  # zamrożone indeksy train/val/test (parquet + manifest)
   models_dir: models
 
 data:
@@ -9,7 +10,29 @@ data:
   # próbka do szybkich iteracji EDA/treningu; ustaw null, by czytać całość (7,7 mln wierszy)
   sample_rows: 500000
   random_state: 42
-  test_size: 0.2
+
+# Kontrakt predykcji: model przewiduje w chwili zgłoszenia (Start_Time).
+# Cechy post-hoc (znane dopiero PO zdarzeniu) — pilnowane testem pytest:
+forbidden_features:
+  - "Distance(mi)"
+  - "End_Time"
+  - "End_Lat"
+  - "End_Lng"
+  # + wszelkie pochodne czasu trwania (End_Time - Start_Time)
+
+evaluation:
+  test_size: 50000            # zamrożony test set, stratyfikowany po Severity
+  val_size: 0.15
+  primary_metric: macro_f1    # po niej stroi Optuna i porównujemy ścieżki
+  secondary_metrics: [f1_per_class, balanced_accuracy, quadratic_weighted_kappa]
+  llm_eval_sample: 2000       # deterministyczna, stratyfikowana podpróbka Z TEST SETU (wspólna dla wszystkich ścieżek w tabeli końcowej)
+  dedup:
+    time_window_minutes: 15   # klucz deduplikacji przed splitem
+    geohash_precision: 5
+
+text:
+  # wynik audytu leakage z W1 — frazy skutkowe do maskowania w wariancie cenzurowanym
+  effect_phrases: []          # uzupełnić po audycie (np. closed, blocked, delay, slow traffic)
 
 mlflow:
   tracking_uri: mlruns
