@@ -161,7 +161,8 @@ Hugging Face Space (Streamlit + małe modele) po zgaszeniu GKE.
 ## Status
 
 - [x] Szkielet projektu (pakiet, config, CI, notebook EDA)
-- [ ] **Pre-W1** (wieczory): DM do Rybińskiego · kaggle.json + CSV w `dane/` · smoke test GPU (torch **cu128**/sm_120 + mini fine-tune DistilBERT na ~1 tys. opisów) · test klucza Groq przez LiteLLM · gitleaks + LICENSE → repo publiczne
+- [ ] **Pre-W1** (wieczory): DM do Rybińskiego · kaggle.json + CSV w `dane/` · smoke test GPU (torch **cu128**/sm_120 + mini fine-tune DistilBERT na ~1 tys. opisów) · test klucza Groq przez LiteLLM
+- [ ] gitleaks + LICENSE → upublicznienie repo (odłożone; najpóźniej przy wysyłce do feedbacku)
 - [ ] W1: EDA + audyt leakage + deduplikacja + `make_splits`
 - [ ] W2: baseline'y + RF + szkic `SeverityPathway`
 - [ ] W3: XGBoost+Optuna + **walking skeleton** (API+Docker+kind)
