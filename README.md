@@ -5,7 +5,7 @@ Przewidywanie powagi wypadku drogowego (`Severity` 1–4) na danych
 [US Accidents (Kaggle)](https://www.kaggle.com/datasets/sobhanmoosavi/us-accidents) — **trzema drogami, które porównuję**:
 
 1. **Tabular** — cechy pogodowe/czasowe/geo → LogisticRegression → RandomForest → **XGBoost + Optuna**, tracking w **MLflow**
-2. **Tekst** — kolumna `Description` → TF-IDF → embeddingi zdaniowe → (Colab) fine-tuning DistilBERT
+2. **Tekst** — kolumna `Description` → TF-IDF → embeddingi zdaniowe → fine-tuning DistilBERT (lokalnie, RTX 5080)
 3. **LLM** — klasyfikacja zero-shot opisu (Groq) na próbce, jako baseline porównawczy + endpoint `/explain`
 
 **Pytanie badawcze:** ile sygnału o powadze wypadku niesie tekstowy opis względem danych
@@ -34,7 +34,7 @@ uv run ruff check .          # lint
 |---|---|---|
 | W1 | EDA: braki (i powody), imbalance, outliery, cechy czasowo-geo | Z2–Z3 |
 | W2–3 | Feature engineering, baseline → RF → XGBoost, Optuna, MLflow | Z3, Z7 |
-| W4 | Ścieżka tekstowa: TF-IDF / embeddingi / DistilBERT (Colab) | Z8 |
+| W4 | Ścieżka tekstowa: TF-IDF / embeddingi / DistilBERT (GPU lokalnie) | Z8 |
 | W5 | LLM zero-shot (Groq) + fuzja cech + wnioski z porównania | Z9 |
 | W6 | Refactor do pakietu: pipeline'y, konfiguracja, pytest, DVC | Z5–Z6 |
 | W7 | FastAPI (`/predict`, `/predict-text`, `/explain`) + Docker | Z11–Z12 |
