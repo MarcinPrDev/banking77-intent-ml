@@ -32,14 +32,31 @@ uv run ruff check .          # lint
 
 | Etap | Zakres | Powtórka |
 |---|---|---|
-| W1 | EDA: braki (i powody), imbalance, outliery, cechy czasowo-geo | Z2–Z3 |
+| W1 | EDA: braki (i powody), imbalance, outliery, cechy czasowo-geo (DuckDB na pełnym zbiorze) | Z2–Z3 |
 | W2–3 | Feature engineering, baseline → RF → XGBoost, Optuna, MLflow | Z3, Z7 |
 | W4 | Ścieżka tekstowa: TF-IDF / embeddingi / DistilBERT (GPU lokalnie) | Z8 |
-| W5 | LLM zero-shot (Groq) + fuzja cech + wnioski z porównania | Z9 |
+| W5 | LLM-y przez LiteLLM (Groq / Gemini / lokalna Ollama) + Langfuse (obserwowalność, evale, koszty) + fuzja cech + wnioski | Z9 |
 | W6 | Refactor do pakietu: pipeline'y, konfiguracja, pytest, DVC | Z5–Z6 |
 | W7 | FastAPI (`/predict`, `/predict-text`, `/explain`) + Docker | Z11–Z12 |
-| W8 | Deploy: GKE/Cloud Run + CI/CD dev→prod | Z13–Z14 |
+| W8 | Deploy: Cloud Run (dev) → GKE Autopilot (prod), CI/CD dev→prod, Secret Manager, WIF | Z13–Z14 |
 | W9 | README, diagram, wyniki, feedback (M. Rybiński) | — |
+
+## Chmura (GCP)
+
+- **BigQuery** — wynik ETL + analizy SQL na pełnym zbiorze (W1–W2, free tier)
+- **GCS** — remote DVC + artefakty modeli (W6)
+- **Dataproc Serverless** — produkcyjny run ETL Spark (W6/W8; workflow w [us-accidents-etl](https://github.com/MarcinPrDev/us-accidents-etl))
+- **Artifact Registry · Cloud Run (dev) · GKE Autopilot (prod) · Secret Manager · Workload Identity Federation** (W7–W8)
+
+## Zgodność z krajobrazem 2026 (LLMOps)
+
+- **LiteLLM** — jedna brama do Groq / Gemini / lokalnej Ollamy (routing, koszty)
+- **Langfuse** — obserwowalność LLM, wersjonowanie promptów, **evale liczone twardo vs etykiety `Severity`**
+- metryka: koszt i latencja / 1000 predykcji per dostawca; structured outputs (Pydantic) w API
+
+## Roadmap (świadomie poza zakresem)
+
+Vertex AI Pipelines/Endpoints · Pub/Sub (streaming) · Cloud Composer/Airflow · agenty i MCP · monitoring dryfu danych
 
 ## Status
 
