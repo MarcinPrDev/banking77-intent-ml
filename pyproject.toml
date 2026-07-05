@@ -21,6 +21,17 @@ dependencies = [
 dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.5", "jupyterlab>=4.2", "ipykernel>=6.29"]
 nlp = ["sentence-transformers>=3.0"]
 llm = ["groq>=0.9"]
+# RTX 5080 = Blackwell/sm_120: torch MUSI pochodzić z indeksu cu128 (patrz [tool.uv.sources]);
+# koło z PyPI (CPU/starsze CUDA) nie zobaczy karty. Instalacja: uv sync --extra gpu
+gpu = ["torch>=2.7", "transformers>=4.44"]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
 
 [build-system]
 requires = ["setuptools>=69"]
