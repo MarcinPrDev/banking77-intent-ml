@@ -24,3 +24,7 @@ mlruns/
 .idea/
 .vscode/
 Thumbs.db
+
+# claude code (lokalny setup wspolpracy z AI: ustawienia, skille, playbook)
+.claude/
+CLAUDE.local.md
