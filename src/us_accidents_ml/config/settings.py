@@ -16,6 +16,7 @@ DEFAULT_CONFIG_PATH = _REPO_ROOT / "configs" / "config.yaml"
 class PathsConfig:
     raw_csv: Path
     processed_dir: Path
+    splits_dir: Path
     models_dir: Path
 
 
@@ -24,7 +25,27 @@ class DataConfig:
     target: str
     sample_rows: int | None
     random_state: int
-    test_size: float
+
+
+@dataclass(frozen=True)
+class DedupConfig:
+    time_window_minutes: int
+    geohash_precision: int
+
+
+@dataclass(frozen=True)
+class EvaluationConfig:
+    test_size: int
+    val_size: float
+    primary_metric: str
+    secondary_metrics: tuple[str, ...]
+    llm_eval_sample: int
+    dedup: DedupConfig
+
+
+@dataclass(frozen=True)
+class TextConfig:
+    effect_phrases: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -37,6 +58,9 @@ class MlflowConfig:
 class Settings:
     paths: PathsConfig
     data: DataConfig
+    forbidden_features: tuple[str, ...]
+    evaluation: EvaluationConfig
+    text: TextConfig
     mlflow: MlflowConfig
 
 
@@ -53,14 +77,27 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         paths=PathsConfig(
             raw_csv=_abs(raw["paths"]["raw_csv"]),
             processed_dir=_abs(raw["paths"]["processed_dir"]),
+            splits_dir=_abs(raw["paths"]["splits_dir"]),
             models_dir=_abs(raw["paths"]["models_dir"]),
         ),
         data=DataConfig(
             target=raw["data"]["target"],
             sample_rows=raw["data"]["sample_rows"],
             random_state=raw["data"]["random_state"],
-            test_size=raw["data"]["test_size"],
         ),
+        forbidden_features=tuple(raw["forbidden_features"]),
+        evaluation=EvaluationConfig(
+            test_size=raw["evaluation"]["test_size"],
+            val_size=raw["evaluation"]["val_size"],
+            primary_metric=raw["evaluation"]["primary_metric"],
+            secondary_metrics=tuple(raw["evaluation"]["secondary_metrics"]),
+            llm_eval_sample=raw["evaluation"]["llm_eval_sample"],
+            dedup=DedupConfig(
+                time_window_minutes=raw["evaluation"]["dedup"]["time_window_minutes"],
+                geohash_precision=raw["evaluation"]["dedup"]["geohash_precision"],
+            ),
+        ),
+        text=TextConfig(effect_phrases=tuple(raw["text"]["effect_phrases"] or ())),
         mlflow=MlflowConfig(
             tracking_uri=raw["mlflow"]["tracking_uri"],
             experiment=raw["mlflow"]["experiment"],

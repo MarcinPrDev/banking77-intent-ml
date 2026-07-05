@@ -14,4 +14,6 @@ def test_settings_load() -> None:
     settings = load_settings()
     assert settings.data.target == "Severity"
     assert isinstance(settings.paths.raw_csv, Path)
-    assert settings.data.test_size == 0.2
+    assert settings.evaluation.test_size == 50000
+    assert settings.evaluation.primary_metric == "macro_f1"
+    assert "Distance(mi)" in settings.forbidden_features
