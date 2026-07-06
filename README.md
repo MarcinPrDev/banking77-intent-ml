@@ -104,7 +104,7 @@ make demo   # pobiera próbkę ~100 tys. (asset GitHub Release), trenuje szybki 
 | W1 · 4–5.07 | EDA (DuckDB, pełny zbiór): braki **i ich powody**, imbalance, outliery, cechy czasowo-geo; **audyt leakage w `Description`** (top n-gramy per klasa, % fraz skutkowych → regex do configu); deduplikacja; **`make_splits` — zamrożony podział** | Z2–Z3 |
 | W2 · 11–12.07 | Baseline'y (Dummy, LogReg) + RF; feature engineering; szkic `SeverityPathway`; MLflow od 1. runa | Z3, Z7 |
 | W3 · 18–19.07 | XGBoost + Optuna (CUDA); run kontrolny leakage; **→ kamień milowy: walking skeleton** (XGBoost w FastAPI + Dockerfile + lokalny kind; bez GCP) | Z3, Z7, Z11 |
-| W4 · 25–26.07 | Ścieżka tekstowa: TF-IDF (pełny + cenzurowany); DistilBERT na próbce (RTX 5080); *(stretch)* embeddingi; → `src/pipelines/text.py` (tylko zwycięski wariant) | Z8 |
+| W4 · 25–26.07 | Ścieżka tekstowa: TF-IDF (pełny + cenzurowany); DistilBERT na próbce (RTX 5080); *(stretch)* embeddingi; → `src/us_accidents_ml/pipelines/text.py` (tylko zwycięski wariant) | Z8 |
 | W5 · 1–2.08 | LLM: LiteLLM→Groq na podpróbce z protokołu + **Langfuse Cloud** (eval vs etykiety, koszt/latencja); **fuzja late-fusion** (timebox 0,5 dnia); *(stretch)* Ollama; **⚑ punkt decyzyjny** (patrz niżej) | Z9 |
 | W6 · 8–9.08 | GCS (splity, modele) + eksport finalnego modelu; `make_sample`+Release; **testy jednostkowe transformerów/pipeline'ów**; porządki; **bufor na poślizg** | Z5–Z6 |
 | W7 · 15–16.08 | FastAPI (`/predict`, `/predict-text`, `/explain`, `/health`, `/ready`, `model_version` w odpowiedzi) + Docker + `make demo`; *(stretch)* Streamlit | Z11–Z12 |

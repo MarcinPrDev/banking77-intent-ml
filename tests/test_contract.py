@@ -6,6 +6,11 @@ run leakage w W3) oznacza się komentarzem `# allow-posthoc` w tej samej linii.
 
 Do rozszerzenia przez autora w W2+: asercje na realnej liście kolumn wejściowych
 pipeline'ów (nie tylko grep po źródłach).
+
+Uwaga (audyt 2026-07-07): skan jest literalny — czerwony test wywoła także zwykły
+komentarz/docstring z nazwą zakazanej kolumny (rozwiązanie: `# allow-posthoc` w tej
+linii), a zielony wynik NIE dowodzi braku leakage'u: pośrednie odwołania (f-stringi,
+konkatenacje, nazwy wczytane z configu) przechodzą. Skanowany jest tylko src/.
 """
 
 import re
