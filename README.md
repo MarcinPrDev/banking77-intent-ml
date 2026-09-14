@@ -97,22 +97,22 @@ make demo   # pobiera próbkę ~100 tys. (asset GitHub Release), trenuje szybki 
 **Pełny zbiór**: CSV (~3 GB) z Kaggle → `dane/US_Accidents_March23.csv`, konfiguracja w
 `configs/config.yaml`, EDA w `notebooks/01_eda.ipynb` (DuckDB liczy po pełnym zbiorze lokalnie).
 
-## Plan — 8 weekendów (start 4–5.07, oddanie ≤ 24.08, termin 27.08)
+## Plan — 7 weekendów (przeplanowane 14.09: start 19–20.09, wysyłka ≤ 31.10; termin przesunięty z 27.08 na koniec października)
 
 | Weekend | Zakres | Powtórka |
 |---|---|---|
-| W1 · 4–5.07 | EDA (DuckDB, pełny zbiór): braki **i ich powody**, imbalance, outliery, cechy czasowo-geo; **audyt leakage w `Description`** (top n-gramy per klasa, % fraz skutkowych → regex do configu); deduplikacja; **`make_splits` — zamrożony podział** | Z2–Z3 |
-| W2 · 11–12.07 | Baseline'y (Dummy, LogReg) + RF; feature engineering; szkic `SeverityPathway`; MLflow od 1. runa | Z3, Z7 |
-| W3 · 18–19.07 | XGBoost + Optuna (CUDA); run kontrolny leakage; **→ kamień milowy: walking skeleton** (XGBoost w FastAPI + Dockerfile + lokalny kind; bez GCP) | Z3, Z7, Z11 |
-| W4 · 25–26.07 | Ścieżka tekstowa: TF-IDF (pełny + cenzurowany); DistilBERT na próbce (RTX 5080); *(stretch)* embeddingi; → `src/us_accidents_ml/pipelines/text.py` (tylko zwycięski wariant) | Z8 |
-| W5 · 1–2.08 | LLM: LiteLLM→Groq na podpróbce z protokołu + **Langfuse Cloud** (eval vs etykiety, koszt/latencja); **fuzja late-fusion** (timebox 0,5 dnia); *(stretch)* Ollama; **⚑ punkt decyzyjny** (patrz niżej) | Z9 |
-| W6 · 8–9.08 | GCS (splity, modele) + eksport finalnego modelu; `make_sample`+Release; **testy jednostkowe transformerów/pipeline'ów**; porządki; **bufor na poślizg** | Z5–Z6 |
-| W7 · 15–16.08 | FastAPI (`/predict`, `/predict-text`, `/explain`, `/health`, `/ready`, `model_version` w odpowiedzi) + Docker + `make demo`; *(stretch)* Streamlit | Z11–Z12 |
-| W8 · 22–23.08 | **Minimum:** obraz→Artifact Registry, deploy **Cloud Run (dev)** przez CI/CD z WIF, manifesty k8s przetestowane na kind. **Stretch:** GKE Autopilot tym samym digestem (tag=SHA; merge→dev, git tag→prod) + Secret Manager. Pół dnia: README/PITCH/diagram, **wysyłka do feedbacku ≤ 24.08** | Z13–Z14 |
+| W1 · 19–20.09 | EDA (DuckDB, pełny zbiór): braki **i ich powody**, imbalance, outliery, cechy czasowo-geo; **audyt leakage w `Description`** (top n-gramy per klasa, % fraz skutkowych → regex do configu); deduplikacja; **`make_splits` — zamrożony podział** | Z2–Z3 |
+| W2+W3 · 26–27.09 | *(etapy scalone przy przeplanowaniu — baseline'y można wyprzedzić wieczorami 22–25.09)* Sob.: baseline'y (Dummy, LogReg) + feature engineering + RF (~20 triali); szkic `SeverityPathway`; MLflow od 1. runa. Niedz.: XGBoost + Optuna (CUDA); run kontrolny leakage; **→ kamień milowy: walking skeleton** (XGBoost w FastAPI + Dockerfile + lokalny kind; bez GCP) | Z3, Z7, Z11 |
+| W4 · 3–4.10 | Ścieżka tekstowa: TF-IDF (pełny + cenzurowany); DistilBERT na próbce (RTX 5080); *(stretch)* embeddingi; → `src/us_accidents_ml/pipelines/text.py` (tylko zwycięski wariant) | Z8 |
+| W5 · 10–11.10 | LLM: LiteLLM→Groq na podpróbce z protokołu + **Langfuse Cloud** (eval vs etykiety, koszt/latencja); **fuzja late-fusion** (timebox 0,5 dnia); *(stretch)* Ollama; **⚑ punkt decyzyjny** (patrz niżej) | Z9 |
+| W6 · 17–18.10 | GCS (splity, modele) + eksport finalnego modelu; `make_sample`+Release; **testy jednostkowe transformerów/pipeline'ów**; porządki; **bufor na poślizg** | Z5–Z6 |
+| W7 · 24–25.10 | FastAPI (`/predict`, `/predict-text`, `/explain`, `/health`, `/ready`, `model_version` w odpowiedzi) + Docker + `make demo`; *(stretch)* Streamlit | Z11–Z12 |
+| W8 · 31.10–1.11 | **Minimum:** obraz→Artifact Registry, deploy **Cloud Run (dev)** przez CI/CD z WIF, manifesty k8s przetestowane na kind. **Stretch:** GKE Autopilot tym samym digestem (tag=SHA; merge→dev, git tag→prod) + Secret Manager. Pół dnia: README/PITCH/diagram, **wysyłka do feedbacku w sobotę 31.10** (niedziela 1.11 = zapas na poprawki niekrytyczne) | Z13–Z14 |
 
-**⚑ Punkt decyzyjny (koniec W5, 2.08):** poślizg o 1 etap → tnij stretch / dołóż wieczory;
+**⚑ Punkt decyzyjny (koniec W5, 11.10):** poślizg o 1 etap → tnij stretch / dołóż wieczory;
 poślizg ≥ 2 etapy → DM do Rybińskiego o przesunięcie terminu (wdrożenie to twardy wymóg
-rubryki — nie tniemy W7–W8). Tu też aktywacja kredytu GCP + **budget alert 10/50 USD**.
+rubryki — nie tniemy W7–W8). Tu też aktywacja kredytu GCP (300 USD / 90 dni — pokryje
+deploy i listopadowe demo na rozmowach) + **budget alert 10/50 USD**.
 
 **Dokumentacja przyrostowo** (definicja „done" etapu): aktualizacja README + wiersz w tabeli
 wyników (macro-F1 + koszt per ścieżka) + 1–2 zdania „co nie zadziałało". ADR-y (`docs/adr/`,
@@ -161,16 +161,15 @@ Hugging Face Space (Streamlit + małe modele) po zgaszeniu GKE.
 ## Status
 
 - [x] Szkielet projektu (pakiet, config, CI, notebook EDA)
-- [ ] **Pre-W1** (wieczory): DM do Rybińskiego · kaggle.json + CSV w `dane/` · smoke test GPU (torch **cu128**/sm_120 + mini fine-tune DistilBERT na ~1 tys. opisów) · test klucza Groq przez LiteLLM
+- [x] **Pre-W1** (5.07): CSV w `dane/` ✅ · smoke test GPU ✅ (torch 2.11+cu128, sm_120, `scripts/smoke_gpu.py`) · termin przesunięty na koniec października (wrzesień) ✅ — **zostało: test klucza Groq przez LiteLLM (do 18.09)**
 - [ ] gitleaks + LICENSE → upublicznienie repo (odłożone; najpóźniej przy wysyłce do feedbacku)
-- [ ] W1: EDA + audyt leakage + deduplikacja + `make_splits`
-- [ ] W2: baseline'y + RF + szkic `SeverityPathway`
-- [ ] W3: XGBoost+Optuna + **walking skeleton** (API+Docker+kind)
-- [ ] W4: tekst (pełny/cenzurowany) + DistilBERT
-- [ ] W5: LLM + Langfuse + fuzja + **punkt decyzyjny**
-- [ ] W6: GCS + testy jednostkowe + bufor
-- [ ] W7: API produkcyjne + `make demo` (+ Streamlit?)
-- [ ] W8: CI/CD→Cloud Run (+ GKE?) + dokumentacja + wysyłka ≤ 24.08
+- [ ] W1 (19–20.09): EDA + audyt leakage + deduplikacja + `make_splits`
+- [ ] W2+W3 (26–27.09): baseline'y + XGBoost+Optuna + **walking skeleton** (API+Docker+kind)
+- [ ] W4 (3–4.10): tekst (pełny/cenzurowany) + DistilBERT
+- [ ] W5 (10–11.10): LLM + Langfuse + fuzja + **punkt decyzyjny 11.10**
+- [ ] W6 (17–18.10): GCS + testy jednostkowe + bufor
+- [ ] W7 (24–25.10): API produkcyjne + `make demo` (+ Streamlit?)
+- [ ] W8 (31.10–1.11): CI/CD→Cloud Run (+ GKE?) + dokumentacja + **wysyłka ≤ 31.10**
 
 ## Tooling — współpraca z AI
 
