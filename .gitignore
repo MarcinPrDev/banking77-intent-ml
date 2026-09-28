@@ -29,3 +29,8 @@ Thumbs.db
 # claude code (lokalny setup wspolpracy z AI: ustawienia, skille, playbook)
 .claude/
 CLAUDE.local.md
+
+# sekrety — klucze API lokalnie w .env (docelowo Secret Manager, W8)
+.env
+.env.*
+!.env.example

@@ -161,9 +161,9 @@ Hugging Face Space (Streamlit + małe modele) po zgaszeniu GKE.
 ## Status
 
 - [x] Szkielet projektu (pakiet, config, CI, notebook EDA)
-- [x] **Pre-W1** (5.07): CSV w `dane/` ✅ · smoke test GPU ✅ (torch 2.11+cu128, sm_120, `scripts/smoke_gpu.py`) · termin przesunięty na koniec października (wrzesień) ✅ — **zostało: test klucza Groq przez LiteLLM (do 18.09)**
+- [x] **Pre-W1** (5.07): CSV w `dane/` ✅ · smoke test GPU ✅ (torch 2.11+cu128, sm_120, `scripts/smoke_gpu.py`) · termin przesunięty na koniec października (wrzesień) ✅ · klucz Groq przez LiteLLM ✅ (28.09, `scripts/smoke_llm.py`) — **Pre-W1 domknięte**
 - [ ] gitleaks + LICENSE → upublicznienie repo (odłożone; najpóźniej przy wysyłce do feedbacku)
-- [ ] W1 (19–20.09): EDA + audyt leakage + deduplikacja + `make_splits`
+- [ ] W1 (start 28.09 wieczorami; parquet ✅ `scripts/csv_to_parquet.py`): EDA + audyt leakage + deduplikacja + `make_splits`
 - [ ] W2+W3 (26–27.09): baseline'y + XGBoost+Optuna + **walking skeleton** (API+Docker+kind)
 - [ ] W4 (3–4.10): tekst (pełny/cenzurowany) + DistilBERT
 - [ ] W5 (10–11.10): LLM + Langfuse + fuzja + **punkt decyzyjny 11.10**
