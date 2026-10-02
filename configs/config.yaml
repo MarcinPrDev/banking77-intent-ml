@@ -3,7 +3,7 @@
 #
 # Zasada: liczby protokołu (seed, val_size, budżety strojenia, hiperparametry startowe) żyją
 # WYŁĄCZNIE tutaj. README/playbook odwołują się do tego pliku; przy rozjeździe wygrywa config.
-# Dataclassy w src/us_accidents_ml/config/settings.py odwzorowują sekcje 1:1 — brak klucza = błąd
+# Dataclassy w src/banking77_intent_ml/config/settings.py odwzorowują sekcje 1:1 — brak klucza = błąd
 # przy starcie, nie cicha wartość domyślna w środku treningu.
 
 dataset:

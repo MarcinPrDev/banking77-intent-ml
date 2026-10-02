@@ -10,7 +10,7 @@ coverage.xml
 dist/
 
 # dane i artefakty (poza repo); /models/ zakotwiczone do roota —
-# bez ukośnika wzorzec ignorowałby też pakiet źródłowy src/us_accidents_ml/models/
+# bez ukośnika wzorzec ignorowałby też pakiet źródłowy src/banking77_intent_ml/models/
 dane/
 # jawnie (choć dane/ już je obejmuje): surowe CSV BANKING77 z scripts/fetch_data.py i indeksy splitu
 dane/banking77/

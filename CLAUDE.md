@@ -1,10 +1,10 @@
-# CLAUDE.md — us-accidents-ml (temat: BANKING77, od 30.09.2026)
+# CLAUDE.md — banking77-intent-ml (temat: BANKING77, od 30.09.2026)
 
 Projekt zaliczeniowy kursu AI & ML Engineering (SAGES/Kodołamacz). **Plan-of-record: README.md**
 (dane i protokół ewaluacji, modele i budżety, plan W1–W5 z datami, minimum vs stretch, wdrożenie).
 Hierarchia dokumentów przy konflikcie: `README.md` > `CLAUDE.md` > `.claude/playbook/00-zasady.md`
 > reszta playbooka; **liczby zawsze z `configs/config.yaml`**.
-Nazwa repo/pakietu jest historyczna (US Accidents) — rename to osobna decyzja autora (`docs/RENAME.md`).
+Repo i pakiet przemianowane 2.10.2026 (wcześniej `us-accidents-ml` / `us_accidents_ml`) — zapis: `docs/RENAME.md`.
 
 ## Zasady współpracy (ważne!)
 
@@ -24,7 +24,7 @@ Nazwa repo/pakietu jest historyczna (US Accidents) — rename to osobna decyzja 
   promptu na teście. Kod w `src/` poza katalogami/modułami `evaluation`/`data`/`audit` nie odwołuje
   się do pliku testowego (`test.csv`, `dataset.test`, pliki pochodne 3 055/385) — pilnuje
   `tests/test_contract.py` (hook PostToolUse; odstępstwo: `# allow-testset` w tej samej linii).
-- **Gdzie żyje kod**: logika treningu/HPO/ewaluacji/pomiarów w `src/us_accidents_ml/{data,features,
+- **Gdzie żyje kod**: logika treningu/HPO/ewaluacji/pomiarów w `src/banking77_intent_ml/{data,features,
   models,evaluation,api}`; w `scripts/` tylko cienkie CLI (`fetch_data`, `smoke_api`, `demo`) —
   strażnik skanuje wyłącznie `src/`, a hook patrzy tylko na `src|configs|tests`.
 - **Zamrożony split walidacyjny**: indeksy w `dane/splits/` (deny na Edit/Write; nie regenerować

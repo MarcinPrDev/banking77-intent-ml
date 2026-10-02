@@ -35,7 +35,7 @@ Czego ten test NIE DOWODZI (i co pilnuje człowiek + /review-ml):
 - poprawności sum plików na dysku (to `scripts/fetch_data.py --check`) ani tego, że nazwy
   w mapie etykiet zgadzają się z danymi (test bez CSV).
 Skanowany jest tylko `src/`; notebooki i `scripts/` są poza kontrolą tego testu — DLATEGO logika
-treningu/HPO/ewaluacji/pomiarów ma żyć w `src/us_accidents_ml/...`, a w `scripts/` tylko cienkie
+treningu/HPO/ewaluacji/pomiarów ma żyć w `src/banking77_intent_ml/...`, a w `scripts/` tylko cienkie
 CLI (`fetch_data`, `smoke_api`, `demo`). Hook też patrzy tylko na `src|configs|tests`.
 """
 
@@ -109,7 +109,7 @@ def _is_exempt(py: Path) -> bool:
 
 def test_is_exempt_matches_whole_path_parts_only():
     """Samokontrola reguły zwolnienia (bez plików na dysku)."""
-    pkg = SRC_DIR / "us_accidents_ml"
+    pkg = SRC_DIR / "banking77_intent_ml"
     assert _is_exempt(pkg / "evaluation" / "metrics.py")
     assert _is_exempt(pkg / "data" / "loader.py")
     assert _is_exempt(pkg / "audit.py")

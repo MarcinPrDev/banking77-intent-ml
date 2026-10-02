@@ -7,12 +7,12 @@ Wyjątek: stałe wynikające z definicji zadania (77 klas, nazwy plików danych)
 
 from pathlib import Path
 
-import us_accidents_ml
-from us_accidents_ml.config import load_settings
+import banking77_intent_ml
+from banking77_intent_ml.config import load_settings
 
 
 def test_package_imports() -> None:
-    assert us_accidents_ml.__version__
+    assert banking77_intent_ml.__version__
 
 
 def test_settings_load() -> None:
@@ -59,7 +59,7 @@ def test_settings_root_follows_config_location(tmp_path, monkeypatch) -> None:
 
     Scenariusz obrazu Docker: moduł w site-packages, config w /app/configs/config.yaml.
     """
-    from us_accidents_ml.config.settings import CONFIG_ENV_VAR, DEFAULT_CONFIG_PATH
+    from banking77_intent_ml.config.settings import CONFIG_ENV_VAR, DEFAULT_CONFIG_PATH
 
     cfg_dir = tmp_path / "configs"
     cfg_dir.mkdir()

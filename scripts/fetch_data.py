@@ -16,7 +16,7 @@ Kody wyjścia: 0 = wybrane pliki obecne i zgodne z sumami, 1 = brak pliku / bł�
 niezgodna suma (plik z niezgodną sumą NIE jest zapisywany).
 
 Zależności: stdlib + PyYAML (zależność główna projektu). Celowo bez importu pakietu
-`us_accidents_ml` — skrypt ma działać także zanim pakiet zostanie zainstalowany lub przemianowany.
+`banking77_intent_ml` — skrypt ma działać także zanim pakiet zostanie zainstalowany.
 
 Licencja danych: CC BY 4.0 (PolyAI-LDN/task-specific-datasets) — atrybucja w README → Licencja.
 """

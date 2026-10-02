@@ -6,8 +6,8 @@ na benchmarku [BANKING77](https://github.com/PolyAI-LDN/task-specific-datasets) 
 
 > **Zmiana tematu 30.09.2026.** Do 29.09 projekt dotyczył predykcji `Severity` na US Accidents.
 > Powody i liczby z audytu: sekcja *Historia decyzji* i `docs/adr/0001-zmiana-tematu-na-banking77.md`.
-> Nazwa repo/pakietu (`us-accidents-ml`, `us_accidents_ml`) jest historyczna — zmiana nazwy to osobna
-> decyzja, checklista w `docs/RENAME.md`.
+> Repo i pakiet przemianowano 2.10.2026 (wcześniej `us-accidents-ml` / `us_accidents_ml`) — zapis
+> w `docs/RENAME.md`; stare adresy GitHuba przekierowują.
 
 > **Co system robi:** dostaje angielską wiadomość („I still haven't received my card"), zwraca
 > identyfikator intencji (`card_arrival`). **Czego nie robi:** nie rozwiązuje sprawy klienta,
@@ -285,7 +285,8 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
 - [ ] W4 (24–25.10): kind + workflow CI + test HTTP + odtworzenie z instrukcji
 - [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
 - [ ] gitleaks + LICENSE → upublicznienie repo (najpóźniej przy wysyłce)
-- [ ] zmiana nazwy repo/pakietu (`docs/RENAME.md`) — decyzja autora, termin otwarty
+- [x] **2.10 — zmiana nazwy** repo, pakietu i folderu na `banking77-intent-ml` /
+      `banking77_intent_ml` (`docs/RENAME.md`)
 - [x] **2.10 — porządki po poprzednim temacie**: notebook EDA, `csv_to_parquet.py`, `sanity_w1.py`
       i loader US Accidents usunięte z repo (treść w historii gita do commita `5c94e05`; kopie
       robocze i dane poza repo). Loader BANKING77 i nowy `notebooks/01_eda.ipynb` powstają w W1

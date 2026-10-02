@@ -1,7 +1,7 @@
 [project]
-name = "us-accidents-ml"
+name = "banking77-intent-ml"
 version = "0.1.0"
-description = "Klasyfikacja zgloszen na BANKING77 (77 intencji): TF-IDF+LR vs zamrozone embeddingi+kNN vs DistilBERT — jakosc, koszt i wdrozenie (FastAPI, Docker, kind). Projekt koncowy kursu AI & ML Engineering (SAGES/Kodolamacz). Nazwa pakietu historyczna — patrz docs/RENAME.md."
+description = "Klasyfikacja zgloszen na BANKING77 (77 intencji): TF-IDF+LR vs zamrozone embeddingi+kNN vs DistilBERT — jakosc, koszt i wdrozenie (FastAPI, Docker, kind). Projekt koncowy kursu AI & ML Engineering (SAGES/Kodolamacz)."
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Marcin Proch" }]

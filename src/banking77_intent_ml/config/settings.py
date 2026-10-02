@@ -20,7 +20,7 @@ from pathlib import Path
 
 import yaml
 
-# repo root = .../us-accidents-ml (settings.py -> config -> us_accidents_ml -> src -> root);
+# repo root = .../banking77-intent-ml (settings.py -> config -> banking77_intent_ml -> src -> root);
 # poprawne tylko dla checkoutu / instalacji edytowalnej — stąd override przez env (docstring).
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CONFIG_PATH = _REPO_ROOT / "configs" / "config.yaml"
