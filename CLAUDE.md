@@ -39,12 +39,13 @@ Nazwa repo/pakietu jest historyczna (US Accidents) — rename to osobna decyzja 
   checkpointu/konfiguracji na walidacji; recall/F1 per klasa, macierz pomyłek; koszt = czas
   treningu, rozmiar artefaktu, latencja CPU p50/p95 batch=1 (zimny vs rozgrzany).
   **Nie wymyślaj liczb** — każda z MLflow/wykonanego kodu albo „do zmierzenia".
-- Środowisko: **uv**. Lokalnie JEDNA komenda: `uv sync --extra dev --extra nlp --extra gpu`
-  (od W2 także `--extra serving`); goły `uv sync --extra dev` wyłącznie w CI. **`uv sync` jest
+- Środowisko: **uv**. Lokalnie JEDNA komenda:
+  `uv sync --extra dev --extra nlp --extra gpu --extra serving`;
+  goły `uv sync --extra dev` wyłącznie w CI. **`uv sync` jest
   „exact" — extras pominięte w komendzie są usuwane ze środowiska** (torch/transformers znikają);
   po każdym sync na GPU sprawdź `torch.cuda.is_available()`. `uv run` jest bezpieczny (inexact).
   Extras: `nlp` (sentence-transformers), `gpu` (torch cu128 + transformers), `llm` (groq + litellm),
-  `serving` (fastapi, uvicorn, httpx — dochodzi w commicie „Zależności pod BANKING77", README → Status).
+  `serving` (fastapi, uvicorn, httpx).
 - MLflow: `mlflow.set_tracking_uri(settings.mlflow.tracking_uri)` na starcie każdego skryptu
   i notebooka (bezwzględny `file://` URI z `paths.mlruns`) — nigdy goły napis `mlruns`, bo MLflow
   rozwiązuje go względem cwd i run z `notebooks/` wyląduje w drugim store.

@@ -162,7 +162,7 @@ Jeśli wygra DistilBERT, obraz musi mieć torch CPU — rozmiar i czas budowy **
 
 ```bash
 # Środowisko lokalne (Python 3.11, uv) — JEDNA komenda z pełną listą extras używanych lokalnie:
-uv sync --extra dev --extra nlp --extra gpu          # od W2 dodatkowo: --extra serving (FastAPI)
+uv sync --extra dev --extra nlp --extra gpu --extra serving
 uv run python scripts/fetch_data.py        # train.csv + test.csv z przypiętego commitu, weryfikacja SHA-256
 uv run pytest                              # strażnik protokołu + testy dymne
 uv run ruff check .
@@ -170,7 +170,8 @@ uv run ruff check .
 # (torch/transformers znikną po gołym `uv sync --extra dev`). Goły `--extra dev` jest tylko dla CI.
 # Po każdym sync na maszynie z GPU: python -c "import torch; print(torch.cuda.is_available())"
 # gpu = torch z indeksu cu128 (RTX 5080/sm_120) + transformers; nlp = sentence-transformers;
-# llm (stretch A): --extra llm + GROQ_API_KEY w .env (poza gitem); serving (od W2): fastapi, uvicorn, httpx
+# serving = fastapi, uvicorn, httpx (API od W2); llm (stretch A): dodatkowo --extra llm
+# + GROQ_API_KEY w .env (poza gitem)
 ```
 
 Od W2: `uv run uvicorn ...` z modelem baseline; od W3: `docker build` + `docker run` z testem
@@ -276,19 +277,18 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
 - [ ] **W1** (pt 2.10 wieczór + weekend 3–4.10): fetch → EDA + audyt jakości → mapa etykiet
       → `make_splits` + manifest → TF-IDF baseline w MLflow → zapis/odczyt → test DistilBERT na GPU
       → **bramka 4.10**
-- [ ] **W1/W2 — commit „Zależności pod BANKING77"** (`pyproject.toml`): usunąć resztki poprzedniego
-      tematu z zależności głównych (`xgboost`, `duckdb`, `pygeohash`; `optuna` zostaje tylko jeśli HPO
-      TF-IDF idzie przez Optunę), dodać extra `serving` (`fastapi`, `uvicorn[standard]`, `httpx` —
-      `TestClient` FastAPI wymaga `httpx`); `uv lock` + `uv sync --locked ...` lokalnie **przed** pushem
-      (CI używa `--locked` — lock bez commitu = czerwone CI). Najpóźniej na starcie W2 (API)
+- [x] **2.10 — zależności pod BANKING77**: z zależności głównych usunięte `xgboost`, `duckdb`,
+      `pygeohash`; dodany extra `serving` (`fastapi`, `uvicorn[standard]`, `httpx` — wymagany przez
+      `TestClient`); `optuna` zostaje do decyzji przy HPO w W2 (Optuna czy siatka)
 - [ ] W2 (10–11.10): trzy ścieżki + HPO + pomiary CPU + API z baseline'em
 - [ ] W3 (17–18.10): zamrożenie, ocena końcowa, analiza błędów, artefakt, testy, Docker
 - [ ] W4 (24–25.10): kind + workflow CI + test HTTP + odtworzenie z instrukcji
 - [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
 - [ ] gitleaks + LICENSE → upublicznienie repo (najpóźniej przy wysyłce)
 - [ ] zmiana nazwy repo/pakietu (`docs/RENAME.md`) — decyzja autora, termin otwarty
-- [ ] porządki po poprzednim temacie (W1): `data/loader.py` (martwy — do zastąpienia loaderem
-      BANKING77), `notebooks/01_eda.ipynb`, `scripts/csv_to_parquet.py` — archiwum albo usunięcie
+- [x] **2.10 — porządki po poprzednim temacie**: notebook EDA, `csv_to_parquet.py`, `sanity_w1.py`
+      i loader US Accidents usunięte z repo (treść w historii gita do commita `5c94e05`; kopie
+      robocze i dane poza repo). Loader BANKING77 i nowy `notebooks/01_eda.ipynb` powstają w W1
 - Rezerwa: zużyto **0 z 8 h** (aktualizacja na koniec każdego slotu)
 
 **Wyniki na walidacji** (W1–W2; zamrożona walidacja z manifestu — do wyboru konfiguracji,

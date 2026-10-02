@@ -1,8 +1,8 @@
-"""Smoke test bramy LLM pod W5 (Groq przez LiteLLM) — ogon Pre-W1.
+"""Smoke test bramy LLM pod stretch A — LLM zero-shot (Groq przez LiteLLM).
 
 Weryfikuje WYŁĄCZNIE środowisko i klucz. Celowo NIE dotyka danych projektu i NIE
 projektuje promptu klasyfikacyjnego — dobór modelu, promptu i protokołu oceny to
-decyzje merytoryczne z W5 (README → Ścieżki i budżet strojenia).
+decyzje merytoryczne przy starcie stretchu (README → Protokół ewaluacji, pkt 8).
 
 Co sprawdza:
 1. klucz GROQ_API_KEY jest widoczny (z `.env` albo ze zmiennych środowiskowych),
@@ -11,11 +11,13 @@ Co sprawdza:
 3. jedno trywialne zapytanie przechodzi: latencja, tokeny, koszt.
 
 Uruchomienie:
-    uv sync --extra llm
+    uv sync --extra dev --extra nlp --extra gpu --extra serving --extra llm
+    # pełna lista extras: `uv sync` usuwa extras pominięte w komendzie
     # klucz: skopiuj .env.example -> .env i wklej wartość (.env jest poza gitem)
     uv run python scripts/smoke_llm.py [nazwa-modelu]
 
-Oczekiwany finał: "SMOKE TEST LLM: OK". Każdy inny wynik = W5 zagrożone, debuguj teraz.
+Oczekiwany finał: "SMOKE TEST LLM: OK". Każdy inny wynik = stretch LLM zablokowany
+(rdzeń projektu go nie potrzebuje).
 """
 
 import os
@@ -54,7 +56,10 @@ def main() -> None:
     try:
         import litellm
     except ImportError:
-        fail("brak litellm. Zainstaluj: uv sync --extra llm")
+        fail(
+            "brak litellm. Zainstaluj (pełna lista extras — sync usuwa pominięte): "
+            "uv sync --extra dev --extra nlp --extra gpu --extra serving --extra llm"
+        )
 
     litellm.drop_params = True  # nieobsługiwane parametry nie mają wywracać wywołania
 
@@ -79,7 +84,7 @@ def main() -> None:
             fail("w katalogu nie ma modelu czatowego — podaj model argumentem.")
         model = (preferred or chat)[0]
         print(f"\nModel nie podany — biorę pierwszy czatowy z katalogu: {model}")
-        print("(wybór modelu pod ścieżkę LLM to decyzja z W5; tu chodzi tylko o test klucza)")
+        print("(wybór modelu pod stretch LLM to osobna decyzja; tu chodzi tylko o test klucza)")
 
     print(f"\nWywołanie testowe: {model}")
     start = time.perf_counter()
@@ -115,9 +120,9 @@ def main() -> None:
         print(f"Koszt tego wywołania: ${cost:.8f}")
     except Exception as exc:  # noqa: BLE001 - brak cennika nie unieważnia smoke testu
         print(f"Koszt: nieznany ({type(exc).__name__}) — cennik modelu może nie być w LiteLLM.")
-    print("(koszt/latencję na 1000 predykcji mierzysz w W5, na realnym promptcie i podpróbce)")
+    print("(koszt i latencję mierzysz w stretchu A, na zamrożonym promptcie i 385 wiadomościach)")
 
-    print("\n[OK] SMOKE TEST LLM — klucz Groq działa przez LiteLLM, brama gotowa pod W5.")
+    print("\n[OK] SMOKE TEST LLM — klucz Groq działa przez LiteLLM, brama gotowa pod stretch A.")
 
 
 if __name__ == "__main__":

@@ -1,15 +1,20 @@
-"""Smoke test środowiska GPU pod W4 (DistilBERT na RTX 5080 / Blackwell sm_120).
+"""Smoke test środowiska GPU pod fine-tuning DistilBERT (RTX 5080 / Blackwell sm_120).
 
 Weryfikuje WYŁĄCZNIE środowisko (nie robi żadnego ML na realnych danych):
 1. torch widzi kartę i ma wkompilowane sm_120 (koła cu128+),
 2. tensor przechodzi przez GPU (matmul),
 3. DistilBERT: forward + backward na 8 sztucznych zdaniach mieści się w VRAM.
 
-Uruchomienie:  uv sync --extra gpu  &&  uv run python scripts/smoke_gpu.py
-Oczekiwany finał: "SMOKE TEST GPU: OK". Każdy inny wynik = W4 zagrożone, debuguj teraz.
+Środowisko:    uv sync --extra dev --extra nlp --extra gpu --extra serving
+               (pełna lista extras — `uv sync` usuwa extras pominięte w komendzie)
+Uruchomienie:  uv run python scripts/smoke_gpu.py
+Oczekiwany finał: "SMOKE TEST GPU: OK". Każdy inny wynik = ścieżka DistilBERT zagrożona
+(osobny timebox GPU w playbooku; fallback: TF-IDF + LinearSVC).
 """
 
 import sys
+
+SYNC_HINT = "uv sync --extra dev --extra nlp --extra gpu --extra serving"
 
 
 def fail(msg: str) -> None:
@@ -21,7 +26,7 @@ def main() -> None:
     try:
         import torch
     except ImportError:
-        fail("brak torch. Zainstaluj: uv sync --extra gpu")
+        fail(f"brak torch. Zainstaluj: {SYNC_HINT}")
 
     print(f"torch {torch.__version__} | CUDA build: {torch.version.cuda}")
 
@@ -39,7 +44,7 @@ def main() -> None:
     if cap >= (12, 0) and not any("120" in a for a in archs):
         fail(
             "karta to Blackwell (sm_120), ale ten build torch nie ma sm_120 w arch list — "
-            "kernele nie ruszą. Wymuś koła cu128+: uv sync --extra gpu (index w pyproject.toml)."
+            f"kernele nie ruszą. Wymuś koła cu128+ (index w pyproject.toml): {SYNC_HINT}"
         )
 
     x = torch.randn(1024, 1024, device="cuda")
@@ -49,7 +54,7 @@ def main() -> None:
     try:
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
     except ImportError:
-        fail("brak transformers. Zainstaluj: uv sync --extra gpu")
+        fail(f"brak transformers. Zainstaluj: {SYNC_HINT}")
 
     model_id = "distilbert-base-uncased"
     print(f"Pobieram/laduję {model_id} (pierwszy raz ~270 MB)...")
@@ -66,7 +71,7 @@ def main() -> None:
     peak_gb = torch.cuda.max_memory_allocated() / 1e9
     print(f"DistilBERT fwd+bwd: OK | loss={out.loss.item():.4f} | peak VRAM={peak_gb:.2f} GB")
 
-    print("\n[OK] SMOKE TEST GPU — środowisko gotowe pod W4 (fine-tune DistilBERT lokalnie).")
+    print("\n[OK] SMOKE TEST GPU — środowisko gotowe pod fine-tuning DistilBERT lokalnie.")
 
 
 if __name__ == "__main__":
