@@ -1,7 +1,7 @@
 [project]
 name = "us-accidents-ml"
 version = "0.1.0"
-description = "Accident Severity Intelligence — predykcja powagi wypadku (US Accidents): cechy tabelaryczne vs opis tekstowy vs LLM. Projekt koncowy kursu AI & ML Engineering (SAGES/Kodolamacz)."
+description = "Klasyfikacja zgloszen na BANKING77 (77 intencji): TF-IDF+LR vs zamrozone embeddingi+kNN vs DistilBERT — jakosc, koszt i wdrozenie (FastAPI, Docker, kind). Projekt koncowy kursu AI & ML Engineering (SAGES/Kodolamacz). Nazwa pakietu historyczna — patrz docs/RENAME.md."
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Marcin Proch" }]

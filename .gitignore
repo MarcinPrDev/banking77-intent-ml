@@ -12,10 +12,19 @@ dist/
 # dane i artefakty (poza repo); /models/ zakotwiczone do roota —
 # bez ukośnika wzorzec ignorowałby też pakiet źródłowy src/us_accidents_ml/models/
 dane/
+# jawnie (choć dane/ już je obejmuje): surowe CSV BANKING77 z scripts/fetch_data.py i indeksy splitu
+dane/banking77/
+dane/splits/
 /models/
 mlruns/
 *.joblib
 *.parquet
+# niedokończone pobrania fetch_data.py
+*.part
+# git-tracked MIMO danych poza repo: manifest splitu i mapa etykiet (żaden wzorzec wyżej ich nie
+# łapie — configs/ nie jest ignorowane; negacje poniżej to zabezpieczenie na przyszłość)
+!configs/split_manifest.json
+!configs/label_map.json
 
 # jupyter
 .ipynb_checkpoints/
@@ -30,7 +39,7 @@ Thumbs.db
 .claude/
 CLAUDE.local.md
 
-# sekrety — klucze API lokalnie w .env (docelowo Secret Manager, W8)
+# sekrety — klucze API lokalnie w .env (w CI: GitHub Secrets; GCP Secret Manager tylko przy stretchu GKE)
 .env
 .env.*
 !.env.example

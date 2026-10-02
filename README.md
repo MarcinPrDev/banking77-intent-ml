@@ -1,184 +1,341 @@
-# Accident Severity Intelligence (us-accidents-ml)
+# Klasyfikacja zgłoszeń na BANKING77 — porównanie jakości, kosztu i wdrożenia metod NLP
 
 Projekt końcowy kursu **AI & ML Engineering** (SAGES/Kodołamacz, gr. 06.12.2025).
-Klasyfikacja powagi wypadku drogowego na danych
-[US Accidents (Kaggle)](https://www.kaggle.com/datasets/sobhanmoosavi/us-accidents) — 7,7 mln zdarzeń, 2016–2023.
+Klasyfikacja intencji pojedynczej wiadomości klienta banku do jednej z **77 kategorii**
+na benchmarku [BANKING77](https://github.com/PolyAI-LDN/task-specific-datasets) (PolyAI, 2020).
 
-> **Co mierzy target:** `Severity` (1–4) w tym zbiorze opisuje **wpływ zdarzenia na ruch drogowy**
-> (długość i czas utrudnień), nie obrażenia uczestników.
+> **Zmiana tematu 30.09.2026.** Do 29.09 projekt dotyczył predykcji `Severity` na US Accidents.
+> Powody i liczby z audytu: sekcja *Historia decyzji* i `docs/adr/0001-zmiana-tematu-na-banking77.md`.
+> Nazwa repo/pakietu (`us-accidents-ml`, `us_accidents_ml`) jest historyczna — zmiana nazwy to osobna
+> decyzja, checklista w `docs/RENAME.md`.
 
-**Pytania badawcze** (dwa, celowo rozdzielone):
+> **Co system robi:** dostaje angielską wiadomość („I still haven't received my card"), zwraca
+> identyfikator intencji (`card_arrival`). **Czego nie robi:** nie rozwiązuje sprawy klienta,
+> nie ocenia ryzyka, nie wykrywa intencji spoza 77 klas (test nie waliduje OOD).
 
-1. Ile sygnału o powadze wypadku **niesie** opis tekstowy (`Description`) względem cech
-   strukturalnych (pogoda/czas/geo) — i czy fuzja obu poprawia wynik?
-2. Ile tekst **zdradza** wprost (frazy skutkowe typu *road closed*, *major delays* to częściowo
-   „przeczytana odpowiedź")? Dlatego ścieżka tekstowa ma **dwa warianty**: pełny tekst
-   (uczciwie: „ekstrakcja severity z raportu") i **cenzurowany** (maskowanie fraz skutkowych
-   regexem) — różnica między nimi ≈ udział leakage'u w wyniku.
+**Pytanie badawcze:** czy dostrajany mały transformer (DistilBERT) poprawia jakość klasyfikacji
+względem TF-IDF + regresji logistycznej i zamrożonych embeddingów + kNN **na tyle, żeby uzasadnić
+większy koszt uczenia i predykcji na CPU**? Wynikiem projektu jest uzasadniony wybór jednego modelu
+i działająca usługa — także wtedy, gdy najdroższy model nie wygra.
 
-## Kontrakt predykcji
+## Dane
 
-Model przewiduje **w chwili zgłoszenia** (`Start_Time`). Cechy zakazane (znane dopiero po
-zdarzeniu): `Distance(mi)`, `End_Time` i pochodne (czas trwania), `End_Lat`, `End_Lng`.
-Lista `forbidden_features` żyje w `configs/config.yaml`, a test w pytest pilnuje, żeby pipeline
-ich nie używał. W W2–3 jeden kontrolny run MLflow „z cechami post-hoc vs bez" ilustruje skalę
-target leakage w raporcie.
+| | Trening (`train.csv`) | Test (`test.csv`) |
+|---|---:|---:|
+| Wiersze | 10 003 | 3 080 |
+| Kategorie | 77 | 77 |
+| Przykłady na kategorię | 35–187 (mediana 127) | dokładnie 40 |
+| Puste teksty / etykiety | 0 / 0 | 0 / 0 |
+| Nadmiarowe duplikaty po normalizacji¹ | 31 | 4 |
+| Grupy znormalizowane z różnymi etykietami | 1 | 1 |
 
-## Protokół ewaluacji (wspólny dla wszystkich ścieżek)
+¹ Normalizacja audytowa: Unicode NFKC → casefold → tokeny `\w+` połączone spacją. **25 tekstów
+testowych ma odpowiednik w train** po tej normalizacji (etykiety zgodne); bez nich zostaje **3 055**.
+Liczby z własnego audytu danych (30.09.2026, normalizacja jak w `split.dedup_normalization`
+w configu); skrypt audytu trafi do repo w W1 (`notebooks/` lub `scripts/`), notatka źródłowa poza repo.
 
-- **Jeden zamrożony podział** train/val/test (test ~50 tys., stratyfikowany po `Severity`),
-  tworzony w W1 skryptem `make_splits` (stały seed; indeksy jako parquet + manifest z hashem;
-  kopia w GCS od W6). Przed splitem: **deduplikacja bliskich duplikatów**
-  (klucz: `Start_Time` ±15 min + geohash 5–6 znaków — skala do zmierzenia w W1).
-- Decyzja **random-stratified vs split czasowy** podjęta i opisana w W1 (zbiór ma skokową
-  zmianę źródeł ~2020 — autorzy ostrzegają przed porównaniami rok-do-roku).
-- **Metryka główna: macro-F1** (po niej stroi Optuna i po niej porównujemy ścieżki).
-  Pomocnicze: F1 per klasa, confusion matrix, balanced accuracy, Quadratic Weighted Kappa
-  (Severity jest porządkowe). Accuracy kłamie: ~80% zbioru to Severity=2.
-- **Imbalance**: wagi klas (`class_weight` / wagi próbek w XGBoost). Świadomie bez SMOTE —
-  niepraktyczny przy milionach wierszy.
-- **Baseline'y w MLflow od pierwszego dnia W2**: `DummyClassifier` (most_frequent, stratified)
-  i LogReg na 2–3 cechach.
-- Wiersze testowe **nie uczestniczą w żadnym** treningu/tuningu (fit TF-IDF, podpróbka
-  DistilBERT, CV Optuny).
-- **LLM** oceniany na deterministycznej, stratyfikowanej podpróbce **1–2 tys. z test setu**
-  (seed w configu). W tabeli końcowej: macro-F1 wszystkich ścieżek policzone także na tej
-  wspólnej podpróbce + adnotacja N przy każdej liczbie.
+- **Źródło:** repozytorium `PolyAI-LDN/task-specific-datasets`, przypięty commit
+  `57ec275d8078af65b7731c2a98be812d844a6d6b`, pliki `banking_data/train.csv`
+  (SHA-256 `b06e26ac…cbc664b`) i `banking_data/test.csv` (SHA-256 `d12d6e3b…cfeeb474d`), łącznie
+  1 079 034 B. Pełne sumy w `configs/config.yaml`; pobranie i weryfikacja: `scripts/fetch_data.py`.
+  Nie mieszamy z kopiami z HF/MTEB (inna licencja w metadanych, inny protokół, w v2 usunięte wiersze).
+- **Licencja danych:** CC BY 4.0 — atrybucja w sekcji *Licencja*. Dane poza repo; w repo kod,
+  skrypt pobrania, mapa etykiet i manifest splitu.
+- **Co wiemy o pochodzeniu:** karta danych nie dokumentuje sposobu pozyskania ani anonimizacji
+  (przy danych osobowych wpis „N/A"). Własny skan 13 083 tekstów pięcioma wzorcami (e-mail, URL,
+  ≥9 cyfr, IBAN, przedstawianie się) dał **0 trafień — to nie dowodzi braku PII** (bez NER, bez
+  ręcznego przeglądu). **Wykrycie istotnych PII w trakcie EDA = podstawa rezygnacji ze zbioru.**
+- **Znane problemy etykiet:** Ying & Thomas (2022) wskazują automatycznie **1 428 potencjalnych
+  problemów w train (~14%)**. Nie usuwamy ich hurtowo i nie zmieniamy etykiet testu po obejrzeniu
+  predykcji; analizujemy pomyłki i niejednoznaczne intencje w analizie błędów.
+- **Ograniczenia zbioru:** test jest sztucznie zrównoważony (wynik nie odwzorowuje częstości
+  rzeczywistych zgłoszeń); przy 40 przykładach na klasę jedna pomyłka = 2,5 p.p. recallu klasy;
+  brak czasu i identyfikatorów rozmów (nie da się zweryfikować podziału chronologicznego).
 
-## Ścieżki i budżet strojenia
+## Protokół ewaluacji (wspólny dla wszystkich modeli)
 
-| Ścieżka | Modele | HPO (na stratyfikowanej próbce, wyniki w MLflow) |
-|---|---|---|
-| Tabular | Dummy → LogReg → RandomForest → **XGBoost** (`device="cuda"`) | LogReg: defaulty (baseline); RF: ~20 triali Optuna; XGBoost: pełna Optuna |
-| Tekst (pełny i cenzurowany) | TF-IDF+LogReg → *(stretch)* embeddingi zdaniowe → DistilBERT (RTX 5080; próbka 200–300 tys.) | TF-IDF: mały grid (ngram, min_df, C); DistilBERT: 2–3 konfiguracje (lr, epochs, batch) |
-| LLM | Groq zero-shot przez LiteLLM; *(stretch)* lokalna Ollama | prompt few-shot dobierany na val, nie na test |
-| Fuzja | **late fusion**: stacking prawdopodobieństw OOF (tabular + tekst) przez LogReg (timebox: pół dnia) | — |
+1. **Przypięte:** commit, sumy plików, mapa nazw kategorii → id (`configs/label_map.json`).
+2. **Walidacja z train:** ~15% (`split.val_size`), stratyfikowana; **znormalizowane duplikaty
+   trafiają razem do jednej części**; indeksy w `dane/splits/` (poza gitem, katalog nietykalny)
+   + manifest `configs/split_manifest.json` (git-tracked: seed, val_size, n_train, n_val,
+   sha256 indeksów). Konflikty etykiet zbadane przed podziałem.
+3. **Test tylko do dwóch rzeczy:** audytu integralności i oceny końcowej. Żadnego fitu, HPO,
+   wyboru epoki, progu ani doboru promptu na teście. TF-IDF dopasowany wyłącznie na train.
+4. **Zamrożenie konfiguracji** na walidacji, potem *opcjonalny* refit na całych 10 003 z ustaloną
+   z góry liczbą epok — tylko takie wyniki zestawiamy z kolumną *Full* w literaturze. Jeśli refitu
+   nie robimy, jawnie raportujemy mniejszy budżet danych.
+5. **Metryki:** `accuracy` — główna, do porównania z literaturą; **macro-F1 — metryka wyboru
+   checkpointu/konfiguracji na walidacji (ustalone z góry)**; recall i F1 per klasa; macierz
+   pomyłek. Przy jednym seedzie nie wyciągamy wniosków z różnic o ułamek punktu procentowego.
+6. **Kontrola wrażliwości:** każdy model raportowany także na podzbiorze **3 055** tekstów bez
+   pokrycia z train (ustalonym przed treningiem). To nie nowy benchmark — nie porównywać
+   z publikacjami na 3 080.
+7. **Koszt:** czas treningu, rozmiar całego artefaktu, latencja CPU p50/p95 dla batch=1
+   (z preprocessingiem i ekstrakcją embeddingów), **zimny start osobno od rozgrzanej predykcji**.
+   Surowego wyniku kNN/softmaxu nie nazywamy skalibrowanym prawdopodobieństwem.
+8. **LLM (stretch A):** jeden model, jeden zamrożony prompt, **385 wiadomości testowych
+   (5 na klasę) wybranych z góry** — te same 385 dla wszystkich modeli w tabeli; raport jakości,
+   błędów formatu, tokenów, latencji i kosztu. Dobór promptu tylko na walidacji. **Ekspozycja LLM
+   na benchmark nieustalona** — brak gwarancji czystego testu; wynik nie dowodzi generalizacji.
+
+**Punkty odniesienia (protokół Full, pełny train i test):** DistilBERT-base **92,1%**
+(Qi i in. 2021: batch 32, max_len 128, AdamW wd 0,01, warmup 10% do LR 4e-5, 5 epok);
+BERT-base 93,3%; RoBERTa-base 94,1%; BERT-large 93,66% (Casanueva i in. 2020).
+Dummy (jedna klasa) = 1/77 = **1,30%**. Kanonicznego wyniku TF-IDF+LR nie ma — wyznaczamy własny.
+Liczby z publikacji to konkretne konfiguracje, nie gwarantowany przedział wyników tego projektu.
+
+## Modele i budżet strojenia
+
+| Model | Budżet strojenia (walidacja, MLflow) | Cel | Wagi / licencja |
+|---|---|---|---|
+| Dummy | brak | kontrola rozkładu i metryk | — |
+| **TF-IDF + Logistic Regression** | `tfidf_lr.hpo_trials` = 16 konfiguracji wektoryzatora (słowa/znaki, n-gramy, min_df) i regularyzacji (C) | tani, interpretowalny baseline; kandydat do wdrożenia | — |
+| **all-MiniLM-L6-v2 (zamrożony) + kNN** | kilka `k` × ważenie (uniform/distance) | wartość reprezentacji semantycznej bez dostrajania | HF `sentence-transformers/all-MiniLM-L6-v2`, Apache-2.0, rewizja przypięta w configu |
+| **DistilBERT + głowica 77 klas** | 2–3 konfiguracje (np. LR × epoki), start wg Qi 2021 | efekt dostrajania reprezentacji; RTX 5080 | HF `distilbert/distilbert-base-uncased`, Apache-2.0, rewizja przypięta |
+| *(stretch A)* LLM zero-shot | brak strojenia; prompt dobrany na walidacji | koszt/latencja/błędy formatu vs modele dostrajane | Groq (plan płatny, Developer tier) przez LiteLLM; model w `llm.model` |
+| *(fallback)* TF-IDF + LinearSVC | mały grid C | trzecia metoda, gdy transformer nie ruszy | — |
+
+Wartości liczbowe (budżety, hiperparametry startowe, seed) — wyłącznie z `configs/config.yaml`.
+VRAM, czas treningu i latencja na sprzęcie autora: **do zmierzenia** (nikt tego nie liczył).
 
 ## Architektura (wzorce i SOLID)
 
-- `SeverityPathway` (ABC: `fit/predict/evaluate`) z implementacjami `TabularPathway`,
-  `TextPathway`, `LLMPathway` — **Strategy**; szkic interfejsu powstaje już w W2.
-- `PathwayFactory` buduje ścieżkę z `configs/config.yaml` — **Factory Method**.
-- `LLMClient` — wąski interfejs (jedna metoda `classify`) jako cienki wrapper na LiteLLM —
-  **DIP**, trywialnie mockowalny w pytest.
-- Własne transformery sklearn (`BaseEstimator`/`TransformerMixin`) w `Pipeline` — **OCP**
-  przez kompozycję. Mapowanie: SRP (moduły data/features/models/evaluation), OCP, DIP.
+*Propozycja architektury przeniesiona z planu z lipca (szkic asystenta). Wybór wzorców
+potwierdza albo zmienia autor w W2 przy projekcie interfejsu predyktora — odstępstwo = ADR.*
+
+- **Strategy:** wspólny interfejs predyktora (`fit / predict / predict_proba / save / load`) z
+  implementacjami dla TF-IDF+LR, MiniLM+kNN, DistilBERT i (stretch) LLM. API i ewaluacja widzą
+  tylko interfejs — podmiana modelu = zmiana wpisu w configu, nie kodu.
+- **Factory** buduje predyktor z `configs/config.yaml` (nazwa strategii + hiperparametry).
+- **Pipeline'y sklearn** dla ścieżek klasycznych (wektoryzator → klasyfikator w jednym obiekcie,
+  jeden `joblib`); własne transformery (`BaseEstimator`/`TransformerMixin`) tam, gdzie trzeba.
+- **LabelMap** — jedna klasa mapująca nazwa ↔ id, ładowana z przypiętego pliku; wszystkie modele
+  i API używają tej samej instancji (koniec z mieszaniem indeksów z różnych kopii danych).
+- **LLMClient** (stretch) — wąski interfejs `classify`, cienki wrapper na LiteLLM — DIP, mockowalny.
+- Mapowanie SOLID: SRP (moduły `data/features/models/evaluation/api`), OCP (nowy model = nowa
+  klasa, nie edycja istniejących), LSP (każdy predyktor przechodzi ten sam test kontraktu
+  zapis→odczyt→identyczne predykcje), DIP (API zależy od interfejsu, nie od torcha).
 
 ```mermaid
 classDiagram
-    class SeverityPathway { <<abstract>> +fit() +predict() +evaluate() }
-    SeverityPathway <|-- TabularPathway
-    SeverityPathway <|-- TextPathway
-    SeverityPathway <|-- LLMPathway
-    PathwayFactory ..> SeverityPathway : buduje z config.yaml
-    LLMPathway --> LLMClient : DIP
+    class IntentClassifier {
+        <<abstract>>
+        +fit(texts, labels)
+        +predict(texts)
+        +predict_proba(texts)
+        +save(dir)
+        +load(dir)$
+    }
+    IntentClassifier <|-- TfidfLrClassifier
+    IntentClassifier <|-- MiniLmKnnClassifier
+    IntentClassifier <|-- DistilBertClassifier
+    IntentClassifier <|-- LlmZeroShotClassifier : stretch A
+    ClassifierFactory ..> IntentClassifier : buduje z config.yaml
+    IntentClassifier --> LabelMap : nazwa <-> id
+    LlmZeroShotClassifier --> LLMClient : DIP
     LLMClient <|.. LiteLLMClient
+    PredictService --> IntentClassifier : FastAPI /predict
 ```
+
+Nazwy klas są robocze — ostateczne nazewnictwo i podział na moduły to decyzja autora w W2.
 
 ## Przepływ artefaktów modelu
 
-MLflow = **lokalny tracking eksperymentów**. Finalny model → GCS pod wersjonowaną ścieżką
-`gs://<bucket>/models/<nazwa>/<wersja>/`, wersja **przypięta w configu**. W CI krok
-„pobierz model @ pinned version" (auth: WIF) **przed** `docker build` — model wpieczony
-w obraz, tag zawiera wersję (`api-1.3.0-model-0.2.0`). Do obrazu trafiają: pipeline tabular
-(joblib) + lekki wariant tekstowy (TF-IDF); **DistilBERT zostaje artefaktem R&D** w GCS
-(obraz serwujący bez torcha / na kole CPU — mały i szybki w deployu). Odrzucona alternatywa
-(model pobierany na starcie kontenera): cold start + uprawnienia runtime — ADR w `docs/adr/`.
+**MLflow** (lokalny `mlruns/`) = tracking wszystkich runów: parametry, metryki na walidacji,
+czas treningu, rozmiar artefaktu. Po zamrożeniu eksperymentów (W3) **jeden wybrany model**
+trafia do `models/<nazwa>/<wersja>/` z manifestem (sha256 plików, wersje bibliotek, metryki
+walidacyjne, data). Wersja wybranego artefaktu trafi do configu w W3 (sekcja `deploy`:
+`model_version`, `artifact_dir`) — jedno źródło dla build-arg obrazu, tagu, manifestu k8s
+i odpowiedzi `/health` (`MODEL_VERSION`).
+Artefakt jest **wpiekany w obraz CPU podczas `docker build`** (bez pobierania na starcie
+kontenera — brak cold startu i uprawnień runtime). Tag obrazu zawiera wersję modelu.
+
+**Otwarte (decyzja autora w W3):** skąd CI bierze artefakt do `docker build` — (a) GitHub Release
+asset przypięty tagiem + sha256 w configu, (b) trening lekkiego modelu w CI z danych pobranych
+przez `fetch_data.py --only train` (bez `test.csv`; działa tylko dla TF-IDF; manifest splitu niesie tylko hash, więc w CI trzeba
+odtworzyć podział `make_splits` i porównać hash z manifestem — albo refitować na całych 10 003 bez
+podziału), (c) GCS (tylko jeśli GCP wejdzie jako stretch). Decyzja jest częścią ADR wyboru
+artefaktu w W3 — W4 tylko ją implementuje.
+Jeśli wygra DistilBERT, obraz musi mieć torch CPU — rozmiar i czas budowy **do zmierzenia**.
 
 ## Quickstart
 
-**Demo w 5 minut** (bez Kaggle i bez GCP) — od W7:
-
 ```bash
-uv sync --extra dev
-make demo   # pobiera próbkę ~100 tys. (asset GitHub Release), trenuje szybki baseline, podnosi FastAPI
+# Środowisko lokalne (Python 3.11, uv) — JEDNA komenda z pełną listą extras używanych lokalnie:
+uv sync --extra dev --extra nlp --extra gpu          # od W2 dodatkowo: --extra serving (FastAPI)
+uv run python scripts/fetch_data.py        # train.csv + test.csv z przypiętego commitu, weryfikacja SHA-256
+uv run pytest                              # strażnik protokołu + testy dymne
+uv run ruff check .
+# UWAGA: `uv sync` jest "exact" — extras pominięte w komendzie są USUWANE ze środowiska
+# (torch/transformers znikną po gołym `uv sync --extra dev`). Goły `--extra dev` jest tylko dla CI.
+# Po każdym sync na maszynie z GPU: python -c "import torch; print(torch.cuda.is_available())"
+# gpu = torch z indeksu cu128 (RTX 5080/sm_120) + transformers; nlp = sentence-transformers;
+# llm (stretch A): --extra llm + GROQ_API_KEY w .env (poza gitem); serving (od W2): fastapi, uvicorn, httpx
 ```
 
-**Pełny zbiór**: CSV (~3 GB) z Kaggle → `dane/US_Accidents_March23.csv`, konfiguracja w
-`configs/config.yaml`, EDA w `notebooks/01_eda.ipynb` (DuckDB liczy po pełnym zbiorze lokalnie).
+Od W2: `uv run uvicorn ...` z modelem baseline; od W3: `docker build` + `docker run` z testem
+`/health`; od W4: `kind` + workflow w GitHub Actions odtwarzalny z instrukcji w `docs/`.
 
-## Plan — 7 weekendów (przeplanowane 14.09: start 19–20.09, wysyłka ≤ 31.10; termin przesunięty z 27.08 na koniec października)
+## Plan — 5 slotów, 60 h (30.09 → 31.10.2026)
 
-| Weekend | Zakres | Powtórka |
-|---|---|---|
-| W1 · 19–20.09 | EDA (DuckDB, pełny zbiór): braki **i ich powody**, imbalance, outliery, cechy czasowo-geo; **audyt leakage w `Description`** (top n-gramy per klasa, % fraz skutkowych → regex do configu); deduplikacja; **`make_splits` — zamrożony podział** | Z2–Z3 |
-| W2+W3 · 26–27.09 | *(etapy scalone przy przeplanowaniu — baseline'y można wyprzedzić wieczorami 22–25.09)* Sob.: baseline'y (Dummy, LogReg) + feature engineering + RF (~20 triali); szkic `SeverityPathway`; MLflow od 1. runa. Niedz.: XGBoost + Optuna (CUDA); run kontrolny leakage; **→ kamień milowy: walking skeleton** (XGBoost w FastAPI + Dockerfile + lokalny kind; bez GCP) | Z3, Z7, Z11 |
-| W4 · 3–4.10 | Ścieżka tekstowa: TF-IDF (pełny + cenzurowany); DistilBERT na próbce (RTX 5080); *(stretch)* embeddingi; → `src/us_accidents_ml/pipelines/text.py` (tylko zwycięski wariant) | Z8 |
-| W5 · 10–11.10 | LLM: LiteLLM→Groq na podpróbce z protokołu + **Langfuse Cloud** (eval vs etykiety, koszt/latencja); **fuzja late-fusion** (timebox 0,5 dnia); *(stretch)* Ollama; **⚑ punkt decyzyjny** (patrz niżej) | Z9 |
-| W6 · 17–18.10 | GCS (splity, modele) + eksport finalnego modelu; `make_sample`+Release; **testy jednostkowe transformerów/pipeline'ów**; porządki; **bufor na poślizg** | Z5–Z6 |
-| W7 · 24–25.10 | FastAPI (`/predict`, `/predict-text`, `/explain`, `/health`, `/ready`, `model_version` w odpowiedzi) + Docker + `make demo`; *(stretch)* Streamlit | Z11–Z12 |
-| W8 · 31.10–1.11 | **Minimum:** obraz→Artifact Registry, deploy **Cloud Run (dev)** przez CI/CD z WIF, manifesty k8s przetestowane na kind. **Stretch:** GKE Autopilot tym samym digestem (tag=SHA; merge→dev, git tag→prod) + Secret Manager. Pół dnia: README/PITCH/diagram, **wysyłka do feedbacku w sobotę 31.10** (niedziela 1.11 = zapas na poprawki niekrytyczne) | Z13–Z14 |
+Podział pracy: dane/protokół/EDA **10 h** · modele/HPO **12 h** · ewaluacja i analiza błędów **6 h**
+· pakiet/API/testy **8 h** · Docker/kind/CI **9 h** · raport/demo **7 h** · rezerwa **8 h**.
+Godziny slotu obejmują weekend i krótkie wieczory danego tygodnia. Nazwy slotów W1–W5 są
+używane przez skille (`/start-etapu Wn`) i kalendarz.
 
-**⚑ Punkt decyzyjny (koniec W5, 11.10):** poślizg o 1 etap → tnij stretch / dołóż wieczory;
-poślizg ≥ 2 etapy → DM do Rybińskiego o przesunięcie terminu (wdrożenie to twardy wymóg
-rubryki — nie tniemy W7–W8). Tu też aktywacja kredytu GCP (300 USD / 90 dni — pokryje
-deploy i listopadowe demo na rozmowach) + **budget alert 10/50 USD**.
+| Slot | Termin | h | Wymagany rezultat (definicja „done") |
+|---|---|---:|---|
+| **W1** | pt 2.10 (wieczór) + **3–4.10** | 12 | dane pobrane i zweryfikowane; krótka EDA + audyt jakości (duplikaty, konflikty, długości, PII); mapa etykiet; **zamrożona walidacja** (grupowany, stratyfikowany split + manifest); TF-IDF baseline w MLflow; predykcje przeżywają zapis/odczyt; krótki test uruchomienia DistilBERT na GPU |
+| **W2** | **10–11.10** | 14 | trzy ścieżki (TF-IDF+LR, MiniLM+kNN, DistilBERT) z ograniczonym HPO na walidacji; pierwsze pomiary CPU (latencja, rozmiar); szkic interfejsu predyktora + Factory; **FastAPI z baseline'em** (`/predict`, `/health`, wersja modelu) |
+| **W3** | **17–18.10** | 14 | **zamrożenie eksperymentów**; ocena końcowa na teście + podzbiór 3 055; analiza błędów; wybrany artefakt wersjonowany; testy jednostkowe (mapa etykiet, walidacja wejścia, zapis→odczyt, kontrakt API); Dockerfile (obraz CPU). **Bez nowych rodzin modeli** |
+| **W4** | **24–25.10** | 14 | **kind + automatyczny workflow** (build → load → Deployment/Service → test HTTP) w GitHub Actions; próba odtworzenia projektu z instrukcji na czystym klonie; wykorzystanie rezerwy |
+| **W5** | **31.10 (sobota)** | 6 | raport (README z wynikami i wnioskami), demo, kontrola reprodukowalności, **oddanie**. Bez nowych funkcji |
+| | **Razem** | **60** | **Wdrożenie działa przed ostatnim dniem; 1.11 tylko poprawki po wysyłce** |
 
-**Dokumentacja przyrostowo** (definicja „done" etapu): aktualizacja README + wiersz w tabeli
-wyników (macro-F1 + koszt per ścieżka) + 1–2 zdania „co nie zadziałało". ADR-y (`docs/adr/`,
-format MADR, 4–6 szt.) pisane w momencie decyzji. Na końcu `docs/PITCH.md`
-(problem → 3 podejścia → liczby → koszt).
+**Księga godzin:** 60 h = 52 h pracy + 8 h rezerwy. Rezerwa leży w W4 (ogony W1–W3, próba
+odtworzenia, debug workflow). Wieczory 26–30.10 (test obrony, gitleaks, wnioski — do 4,5 h) są
+**poza** 60 h: pokrywa je niewykorzystana rezerwa albo świadome nadgodziny. Wieczory
+30.09–1.10 pochłonęła decyzja o zmianie tematu (research + weryfikacje) — poza budżetem W1.
+Stan rezerwy: wiersz w *Status*, aktualizowany na koniec każdego slotu.
 
-## Zakres: core vs stretch
+**Dokumentacja przyrostowo:** koniec slotu = aktualizacja *Status* w README + wiersz w tabeli
+wyników (accuracy, macro-F1, koszt) + 1–2 zdania „co nie zadziałało". ADR-y (`docs/adr/`, MADR)
+pisane w momencie decyzji.
 
-**CORE** (rubryka + minimum R&D): EDA+DuckDB · splity+protokół · Dummy/LogReg/RF/XGBoost+Optuna+MLflow
-· TF-IDF (2 warianty) vs DistilBERT · LLM Groq z twardym evalem · fuzja late-fusion · pakiet
-OOP+pytest · FastAPI · Docker · klaster (kind lokalnie — rubryka dopuszcza; Cloud Run dev) ·
-CI/CD z WIF · README z wnioskami.
-**STRETCH**: embeddingi zdaniowe · Ollama (chmura vs własny GPU) · GKE Autopilot · Streamlit ·
-Langfuse self-hosted (Helm) · Prometheus/Grafana.
+## Minimum vs stretch
 
-## Chmura (GCP)
+**MINIMUM (zalicza rubrykę):** EDA z audytem jakości · przypięte dane + zamrożony protokół ·
+Dummy / TF-IDF+LR / MiniLM+kNN / DistilBERT z ograniczonym HPO w MLflow · porównanie jakości
+i kosztu · analiza błędów · pakiet OOP (Strategy/Factory/pipeline'y) + pytest · FastAPI ·
+Docker (CPU) · **kind z automatycznym deployem i testem HTTP w CI** · README z wnioskami
+i instrukcją odtworzenia.
 
-- **GCS** — splity, modele (wersjonowane ścieżki), artefakty (W6)
-- **Artifact Registry** — obrazy; **Cloud Run (dev)**; *(stretch)* **GKE Autopilot (prod)** tym samym digestem
-- **Secret Manager** (klucze LLM) + **Workload Identity Federation** (CI→GCP bez kluczy JSON — świadomy upgrade względem us-accidents-etl)
-- Higiena: budget alert po aktywacji kredytu; smoke-deploy „hello world" na starcie W8;
-  `make teardown` (klaster/AR/Cloud Run); zasada: **klaster żyje godziny, nie tygodnie** —
-  dowodem są manifesty, logi CI/CD i nagrane demo, nie żywy URL.
+**STRETCH — w tej kolejności, dopiero po domknięciu minimum:**
+1. dodatkowe seedy finalnego transformera (przedział wyników zamiast jednej liczby);
+2. **LLM zero-shot (wariant A)** — Groq przez LiteLLM na 385 wiadomościach, protokół jak wyżej;
+3. prosty UI (Streamlit) nad API;
+4. GCP: GKE tym samym obrazem (klaster żyje godziny), Artifact Registry.
 
-## LLMOps (krajobraz 2026)
+Rezerwa 8 h **nie jest** z góry budżetem na stretch.
 
-- **LiteLLM** — jedna brama (minimum: Groq; stretch: + lokalna Ollama — kontrast „API vs własny GPU")
-- **Langfuse Cloud** (darmowy tier — zero utrzymania przy 1–2 tys. predykcji): obserwowalność,
-  wersjonowanie promptów, **eval liczony twardo vs etykiety `Severity`**
-- Metryka: koszt i latencja / 1000 predykcji (Groq; stretch: vs Ollama); structured outputs (Pydantic) w API
+## Bramka po W1 i fallback
 
-## Data lineage
+**Bramka (niedziela 4.10 wieczór) — kontynuujemy, jeśli:** dane i grupowany podział są
+odtwarzalne (fetch → make_splits → identyczny manifest), baseline uczy się sensownie ponad Dummy
+(1,30%), predykcje przeżywają zapis/odczyt, i wiadomo, gdzie pójdzie czas wdrożenia.
+**Nie uzależniamy decyzji od 92%.** Jeśli po 3–4 h diagnostyki baseline nie działa → naprawić
+loader / mapę etykiet / pipeline **przed** kolejnymi modelami. Problemy GPU mają osobny timebox
+i nie blokują ścieżek CPU.
 
-Kaggle CSV → **Spark ETL** ([us-accidents-etl](https://github.com/MarcinPrDev/us-accidents-etl) —
-pakiet + testy + CI/CD + deploy na Dataproc; „big data w chmurze" zrealizowane w siostrzanym repo)
-→ parquet → ten projekt.
+**Fallback:** przy problemach z transformerem trzecią metodą zostaje **TF-IDF + LinearSVC**
+(mniej powtórki DL, rdzeń rubryki zachowany). Przy budżecie bliższym 50 h — od początku tnij HPO
+i UI, nie wdrożenie. Poślizg o 1 slot w W1–W3 → tnij stretch/HPO i dokładaj wieczory tak, by W4
+zaczął się z działającym obrazem Docker; W4–W5 są nietykalne (wdrożenie = twardy wymóg rubryki) —
+jeśli na starcie W4 nie ma obrazu, wdrażamy baseline TF-IDF, nie czekamy na lepszy model.
 
-## Roadmap (świadomie poza zakresem)
+## Wdrożenie
 
-BigQuery (sandbox działa bez billingu — łatwo wrócić) · **DVC — świadomie pominięte**: dataset
-statyczny (March23), artefakty wersjonują MLflow + GCS z przypiętymi ścieżkami · Langfuse
-self-hosted (Helm) · ArgoCD/Prometheus/Grafana (killercoda bonus) · Gemini/Vertex AI ·
-Pub/Sub (streaming) · Composer/Airflow · agenty i MCP · monitoring dryfu · trwałe demo na
-Hugging Face Space (Streamlit + małe modele) po zgaszeniu GKE.
+- **FastAPI:** `POST /predict` (tekst → intencja, id, wersja modelu), `GET /health` (status +
+  `MODEL_VERSION`); walidacja wejścia (Pydantic), test kontraktu odpowiedzi w pytest.
+- **Docker:** obraz CPU z wpieczonym artefaktem; jeden wybrany model. Config i mapa etykiet
+  w obrazie: `COPY configs/ /app/configs/` + `ENV BANKING77_CONFIG=/app/configs/config.yaml`
+  (settings liczą ścieżki od położenia configu). Rozmiar i czas budowy — do zmierzenia
+  (TF-IDF: bez torcha; DistilBERT/kNN: torch z indeksu CPU, nie z PyPI — na Linuxie koło z PyPI
+  zawiera CUDA).
+- **kind w CI (obowiązkowe):** workflow GitHub Actions: `docker build` → `kind create cluster`
+  → `kind load docker-image` → `kubectl apply` (Deployment + Service) → `kubectl rollout status`
+  → **test HTTP** `/health` i `/predict` → teardown klastra. Dokumentujemy, że to klaster
+  testowy; dowodem wdrożenia są manifesty, logi workflow i test HTTP, nie żywy URL.
+- **GKE (stretch #4):** ten sam obraz, klaster żyje **godziny, nie tygodnie**, `teardown`
+  tego samego dnia. Koszt: kredyt GKE (74,40 USD/mies.) pokrywa opłatę za zarządzanie klastrem,
+  **nie compute**; alert budżetowy nie zatrzymuje naliczania; nie zakładać zerowego kosztu na
+  podstawie free tier. Aktywacja kredytu GCP dopiero po działającym kind (W4).
+- **Sekrety:** `GROQ_API_KEY` tylko w `.env` (poza gitem) / GitHub Secrets; w kodzie i configu
+  żadnych kluczy.
+
+## Dlaczego bez Sparka i CV
+
+Dane to **~1 MB** (13 083 krótkich zdań; mediana 10 słów w train i 9 w test, maksimum 79 słów).
+Każdy krok — wczytanie, TF-IDF, embeddingi, nawet fine-tuning — mieści się w pamięci jednej maszyny;
+Spark ETL dodałby infrastrukturę bez uzasadnienia w objętości danych („big data w chmurze" — Spark
+ETL, Dataproc, CI/CD — zrealizowano w siostrzanym repo
+[us-accidents-etl](https://github.com/MarcinPrDev/us-accidents-etl)).
+Zadanie jest czysto tekstowe — CV nie ma tu sensownego zastosowania. Zakres powtórki
+kursu: Python, klasyczne ML, OOP/testy, eksperymenty (MLflow), DL/NLP (transformery), API,
+Docker, Kubernetes, CI/CD; LLM jako stretch.
 
 ## Status
 
-- [x] Szkielet projektu (pakiet, config, CI, notebook EDA)
-- [x] **Pre-W1** (5.07): CSV w `dane/` ✅ · smoke test GPU ✅ (torch 2.11+cu128, sm_120, `scripts/smoke_gpu.py`) · termin przesunięty na koniec października (wrzesień) ✅ · klucz Groq przez LiteLLM ✅ (28.09, `scripts/smoke_llm.py`) — **Pre-W1 domknięte**
-- [ ] gitleaks + LICENSE → upublicznienie repo (odłożone; najpóźniej przy wysyłce do feedbacku)
-- [ ] W1 (start 28.09 wieczorami; parquet ✅ `scripts/csv_to_parquet.py`): EDA + audyt leakage + deduplikacja + `make_splits`
-- [ ] W2+W3 (26–27.09): baseline'y + XGBoost+Optuna + **walking skeleton** (API+Docker+kind)
-- [ ] W4 (3–4.10): tekst (pełny/cenzurowany) + DistilBERT
-- [ ] W5 (10–11.10): LLM + Langfuse + fuzja + **punkt decyzyjny 11.10**
-- [ ] W6 (17–18.10): GCS + testy jednostkowe + bufor
-- [ ] W7 (24–25.10): API produkcyjne + `make demo` (+ Streamlit?)
-- [ ] W8 (31.10–1.11): CI/CD→Cloud Run (+ GKE?) + dokumentacja + **wysyłka ≤ 31.10**
+- [x] Szkielet projektu (pakiet, config, CI, uv) — przeniesiony z poprzedniego tematu
+- [x] Smoke testy: GPU (torch cu128, sm_120, `scripts/smoke_gpu.py`), klucz Groq przez LiteLLM
+      (`scripts/smoke_llm.py`) — infrastruktura sprawdzona przed pivotem
+- [x] **30.09:** decyzja o zmianie tematu na BANKING77 · **2.10:** nowy plan-of-record, config,
+      strażnik protokołu (`tests/test_contract.py`) i `scripts/fetch_data.py` w repo
+- [ ] **ADR-0001 — szkic** (kontekst i opcje zestawione z notatek researchu; sekcje *Decyzja*
+      i *Konsekwencje* do dopisania przez autora, status → zaakceptowany) — termin: przed bramką 4.10
+- [ ] **W1** (pt 2.10 wieczór + weekend 3–4.10): fetch → EDA + audyt jakości → mapa etykiet
+      → `make_splits` + manifest → TF-IDF baseline w MLflow → zapis/odczyt → test DistilBERT na GPU
+      → **bramka 4.10**
+- [ ] **W1/W2 — commit „Zależności pod BANKING77"** (`pyproject.toml`): usunąć resztki poprzedniego
+      tematu z zależności głównych (`xgboost`, `duckdb`, `pygeohash`; `optuna` zostaje tylko jeśli HPO
+      TF-IDF idzie przez Optunę), dodać extra `serving` (`fastapi`, `uvicorn[standard]`, `httpx` —
+      `TestClient` FastAPI wymaga `httpx`); `uv lock` + `uv sync --locked ...` lokalnie **przed** pushem
+      (CI używa `--locked` — lock bez commitu = czerwone CI). Najpóźniej na starcie W2 (API)
+- [ ] W2 (10–11.10): trzy ścieżki + HPO + pomiary CPU + API z baseline'em
+- [ ] W3 (17–18.10): zamrożenie, ocena końcowa, analiza błędów, artefakt, testy, Docker
+- [ ] W4 (24–25.10): kind + workflow CI + test HTTP + odtworzenie z instrukcji
+- [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
+- [ ] gitleaks + LICENSE → upublicznienie repo (najpóźniej przy wysyłce)
+- [ ] zmiana nazwy repo/pakietu (`docs/RENAME.md`) — decyzja autora, termin otwarty
+- [ ] porządki po poprzednim temacie (W1): `data/loader.py` (martwy — do zastąpienia loaderem
+      BANKING77), `notebooks/01_eda.ipynb`, `scripts/csv_to_parquet.py` — archiwum albo usunięcie
+- Rezerwa: zużyto **0 z 8 h** (aktualizacja na koniec każdego slotu)
+
+**Wyniki na walidacji** (W1–W2; zamrożona walidacja z manifestu — do wyboru konfiguracji,
+nie do porównań z literaturą; wszystkie liczby z MLflow):
+
+| Model | Konfiguracja (zamrożona) | Acc (val) | Macro-F1 (val) | N-train / N-val | Budżet HPO | Czas treningu |
+|---|---|---:|---:|---:|---:|---:|
+| Dummy (`most_frequent` / `stratified`) | — | do zmierzenia | | | 0 | |
+| TF-IDF + LR | | do zmierzenia | | | | |
+| MiniLM + kNN | | do zmierzenia | | | | |
+| DistilBERT | | do zmierzenia | | | | |
+
+**Tabela końcowa** (W3, test dotknięty raz; koszt z W2; wszystkie liczby z MLflow / wykonanego kodu):
+
+| Model | Acc (test 3 080) | Acc (3 055) | Macro-F1 | Czas treningu | Artefakt | Latencja CPU p50/p95 |
+|---|---:|---:|---:|---:|---:|---:|
+| Dummy | 1,30% (arytmetyka) | — | — | 0 | — | — |
+| TF-IDF + LR | do zmierzenia | | | | | |
+| MiniLM + kNN | do zmierzenia | | | | | |
+| DistilBERT | do zmierzenia | | | | | |
+
+## Historia decyzji
+
+- **ADR-0001 — zmiana tematu z US Accidents na BANKING77** (`docs/adr/0001-zmiana-tematu-na-banking77.md`).
+  Etykieta `Severity` w US Accidents okazała się mieszanką skal różnych dostawców API z dryfem
+  schematu (udział klasy 3 w Source1 spada z ~18% do 0% od 2021; zgodność między źródłami
+  kappa 0,01–0,05), bez uczciwego publicznego punktu odniesienia dla kontraktu „w chwili
+  zgłoszenia". Przy budżecie 50–65 h do 31.10 i szacunku 59–89 h dla starego planu wybrano
+  zbiór z ugruntowanym benchmarkiem i gotowym testem (kryterium: bezpieczeństwo terminu).
+- Wnioski z audytu US Accidents (drabina leakage, kappa źródeł) i temat NHTSA Recalls →
+  **po oddaniu projektu**, nie jako stretch.
 
 ## Tooling — współpraca z AI
 
 Projekt rozwijany z asystą **Claude (Anthropic)** w roli pair-programmera i reviewera
 (plan, szkielet, code review, debugowanie). Decyzje projektowe, analiza, modelowanie
 i wnioski — autor. Commity współtworzone z asystentem są oznaczone stopką
-`Co-Authored-By` w historii git; ADR-y w `docs/adr/` pisane samodzielnie.
+`Co-Authored-By` w historii git. ADR-y w `docs/adr/`: sekcje *Decyzja* i *Konsekwencje* pisze
+autor; w ADR-0001 sekcje *Kontekst* i *Rozważane opcje* zestawił asystent z notatek researchu
+(oznaczone w pliku).
 
 ## Licencja
 
-Kod: MIT. Dane US Accidents: CC BY-NC-SA 4.0 (Sobhan Moosavi) — dane poza repo, w repo tylko
-kod i stratyfikowana próbka z atrybucją.
+**Kod:** MIT (plik `LICENSE` przed upublicznieniem repo).
+**Dane:** BANKING77 — Casanueva, Temčinas, Gerz, Henderson, Vulić (2020), *Efficient Intent
+Detection with Dual Sentence Encoders*, PolyAI; repozytorium `PolyAI-LDN/task-specific-datasets`,
+licencja **CC BY 4.0**. Dane nie są przechowywane w repo — pobiera je `scripts/fetch_data.py`
+z przypiętego commitu. Zmiany własne względem oryginału: wydzielenie walidacji z train (indeksy
+w manifeście), normalizacja tekstu wyłącznie do audytu duplikatów; teksty i etykiety nie są
+modyfikowane. Wagi modeli: all-MiniLM-L6-v2 i distilbert-base-uncased — Apache-2.0.

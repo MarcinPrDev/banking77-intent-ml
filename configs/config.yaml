@@ -1,39 +1,109 @@
-# Accident Severity Intelligence — konfiguracja
+# BANKING77 — klasyfikacja intencji zgłoszeń bankowych (77 klas) — konfiguracja projektu
+# Stan: 30.09.2026 (zmiana tematu z US Accidents; historia: docs/adr/0001-zmiana-tematu-na-banking77.md)
+#
+# Zasada: liczby protokołu (seed, val_size, budżety strojenia, hiperparametry startowe) żyją
+# WYŁĄCZNIE tutaj. README/playbook odwołują się do tego pliku; przy rozjeździe wygrywa config.
+# Dataclassy w src/us_accidents_ml/config/settings.py odwzorowują sekcje 1:1 — brak klucza = błąd
+# przy starcie, nie cicha wartość domyślna w środku treningu.
+
+dataset:
+  name: banking77
+  # Źródło: repozytorium PolyAI z przypiętym commitem — NIE mieszać z kopiami z HF/MTEB
+  # (inna licencja w metadanych, inny protokół, w v2 usunięte wiersze).
+  repo: PolyAI-LDN/task-specific-datasets
+  commit: 57ec275d8078af65b7731c2a98be812d844a6d6b
+  base_url: https://raw.githubusercontent.com/PolyAI-LDN/task-specific-datasets
+  license: CC-BY-4.0                       # dane; kod projektu ma osobną licencję (README → Licencja)
+  n_classes: 77
+  files:
+    train:
+      path: banking_data/train.csv         # ścieżka w repo źródłowym; lokalnie: paths.raw_dir/train.csv
+      sha256: b06e26ac675513959a63135f11b94ea7786ed02da65db93a5650d8838cbc664b
+      n_rows: 10003                        # oczekiwane (audyt 30.09); loader ma to sprawdzić
+    test:
+      path: banking_data/test.csv
+      sha256: d12d6e3bc4c3103966ae786dc435913c0c563dfa328f5a3646d0e62cfeeb474d
+      n_rows: 3080                         # dokładnie 40 na klasę — test jest sztucznie zrównoważony
+  # Przypięta mapa nazw kategorii -> id (git-tracked). Tworzy ją Marcin w W1 z train
+  # (np. nazwy posortowane alfabetycznie); wszystkie modele i API używają TEJ mapy.
+  label_map_path: configs/label_map.json
+
 paths:
-  raw_csv: dane/US_Accidents_March23.csv   # pobierz z Kaggle (sobhanmoosavi/us-accidents)
-  processed_dir: dane/processed
-  splits_dir: dane/splits                  # zamrożone indeksy train/val/test (parquet + manifest)
-  models_dir: models
+  raw_dir: dane/banking77                  # surowe CSV (poza gitem) — pobiera scripts/fetch_data.py
+  splits_dir: dane/splits                  # indeksy zamrożonego splitu (poza gitem; deny na Edit/Write)
+  models_dir: models                       # artefakty wybrane do wdrożenia (poza gitem; /models/ w .gitignore)
+  # Lokalny tracking MLflow (poza gitem). JEDYNE źródło ścieżki store'u: settings.py buduje z niej
+  # bezwzględny URI file:///... (settings.mlflow.tracking_uri). Goły względny napis "mlruns" MLflow
+  # rozwiązuje względem cwd procesu — run z notebooks/ tworzyłby drugi store notebooks/mlruns/.
+  mlruns: mlruns
 
-data:
-  target: Severity
-  # próbka do szybkich iteracji EDA/treningu; ustaw null, by czytać całość (7,7 mln wierszy)
-  sample_rows: 500000
-  random_state: 42
-
-# Kontrakt predykcji: model przewiduje w chwili zgłoszenia (Start_Time).
-# Cechy post-hoc (znane dopiero PO zdarzeniu) — pilnowane testem pytest:
-forbidden_features:
-  - "Distance(mi)"
-  - "End_Time"
-  - "End_Lat"
-  - "End_Lng"
-  # + wszelkie pochodne czasu trwania (End_Time - Start_Time)
+split:
+  # Z oryginalnego train wydzielamy walidację; test.csv NIE uczestniczy w żadnym splicie.
+  val_size: 0.15
+  random_state: 42                         # jedyny seed splitu — manifest musi mieć ten sam
+  stratify: true                           # rozkład klas zachowany w train/val
+  # Znormalizowane duplikaty trafiają RAZEM do jednej części (grupowany podział),
+  # żeby wariant tego samego zdania nie leżał po obu stronach granicy train/val.
+  keep_duplicates_together: true
+  dedup_normalization: "Unicode NFKC -> casefold -> tokeny \\w+ połączone pojedynczą spacją"
+  manifest_path: configs/split_manifest.json   # git-tracked: seed, val_size, n_train, n_val, sha256_val_ids
 
 evaluation:
-  test_size: 50000            # zamrożony test set, stratyfikowany po Severity
-  val_size: 0.15
-  primary_metric: macro_f1    # po niej stroi Optuna i porównujemy ścieżki
-  secondary_metrics: [f1_per_class, balanced_accuracy, quadratic_weighted_kappa]
-  llm_eval_sample: 2000       # deterministyczna, stratyfikowana podpróbka Z TEST SETU (wspólna dla wszystkich ścieżek w tabeli końcowej)
-  dedup:
-    time_window_minutes: 15   # klucz deduplikacji przed splitem
-    geohash_precision: 5
+  primary_metric: accuracy                 # główna — porównanie z literaturą (Full protocol)
+  selection_metric: macro_f1               # wybór checkpointu / konfiguracji na WALIDACJI — ustalone z góry
+  secondary_metrics: [macro_f1, recall_per_class, f1_per_class, confusion_matrix]
+  # Podzbiór testu bez wykrytego pokrycia z train (po normalizacji jak w split.dedup_normalization);
+  # ustalany PRZED treningiem, raportowany dla wszystkich modeli obok pełnego testu.
+  # To kontrola wrażliwości, nie nowy benchmark — nie porównywać z publikacjami na 3080.
+  clean_test_subset_path: dane/splits/test_clean_ids.json
+  n_clean_test_expected: 3055              # 3080 - 25 tekstów z odpowiednikiem w train (audyt 30.09)
 
-text:
-  # wynik audytu leakage z W1 — frazy skutkowe do maskowania w wariancie cenzurowanym
-  effect_phrases: []          # uzupełnić po audycie (np. closed, blocked, delay, slow traffic)
+models:
+  seed: 42                                 # seed treningu (osobny od split.random_state — ten sam numer, inna rola)
+  tfidf_lr:
+    hpo_trials: 16                         # budżet 12–20 konfiguracji (wektoryzator + regularyzacja);
+                                           # 16 to propozycja — do potwierdzenia przez autora (W2)
+  minilm_knn:
+    model_id: sentence-transformers/all-MiniLM-L6-v2   # Apache-2.0
+    revision: PIN-ME                       # hash rewizji z HF Hub — przypiąć w W2 przed pierwszym runem
+    k_values: [1, 3, 5, 10]                # "kilka k" — lista do potwierdzenia przez autora
+    weights: [uniform, distance]
+  distilbert:
+    model_id: distilbert/distilbert-base-uncased        # Apache-2.0
+    revision: PIN-ME                       # jak wyżej
+    # Punkt startowy wg Qi i in. 2021 (92,1% na Full): batch 32, max_len 128, AdamW wd 0,01,
+    # warmup 10% do LR 4e-5, 5 epok. To konfiguracja bazowa, nie gwarancja wyniku.
+    max_len: 128
+    epochs: 5
+    lr: 4.0e-5                             # UWAGA: zapis z kropką — PyYAML czyta "4e-5" jako string
+    batch_size: 32
+    warmup_ratio: 0.1
+    weight_decay: 0.01
+    configs: 3                             # budżet: 2–3 konfiguracje (np. LR x liczba epok)
+
+llm:
+  # Stretch A (po domknięciu rdzenia). Jeden model, jeden zamrożony prompt, dobór promptu TYLKO
+  # na walidacji. Ekspozycja LLM na benchmark nieustalona — wynik nie dowodzi generalizacji.
+  enabled: false
+  # Wybór modelu = decyzja merytoryczna Marcina przy starcie stretchu A (jeden model, jeden
+  # zamrożony prompt). Placeholder jak `revision: PIN-ME`. Kandydaci z katalogu Groq (smoke 28.09):
+  # openai/gpt-oss-20b, openai/gpt-oss-120b (UWAGA: reasoning zużywa max_tokens -> przy małym
+  # limicie pusta odpowiedź; brak cennika w LiteLLM -> koszt liczony ręcznie z cennika Groq),
+  # qwen3.8-27b. Zapis w konwencji LiteLLM: groq/<id modelu>. Groq plan płatny (Developer tier).
+  model: DO-WYBORU
+  n_eval: 385                              # 5 na klasę x 77 — te same wiadomości dla WSZYSTKICH modeli
+  per_class: 5
+  # 385 id testu (5/klasę) wybrane Z GÓRY, przed treningiem. Sposób losowania (seed, stratyfikacja
+  # per klasa) ustala Marcin w W1 razem z make_splits — plik 04 §6 mówi tylko "wcześniej wybrane,
+  # po pięć na klasę"; propozycja: seed = split.random_state. Hash listy do split_manifest.json.
+  eval_ids_path: dane/splits/llm_eval_ids.json
 
 mlflow:
-  tracking_uri: mlruns
-  experiment: severity-tabular
+  # tracking_uri NIE jest kluczem configu: settings.mlflow.tracking_uri = file:// URI z paths.mlruns
+  # (jedno źródło ścieżki). W kodzie: mlflow.set_tracking_uri(settings.mlflow.tracking_uri).
+  experiment: banking77-intent
+
+api:
+  model_version_env: MODEL_VERSION         # wersja artefaktu wpieczonego w obraz; zwracana w /health i /predict
+  host: 0.0.0.0
+  port: 8000
