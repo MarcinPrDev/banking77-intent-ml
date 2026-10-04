@@ -24,10 +24,13 @@ Co ten test DOWODZI:
    się z configiem (`split.random_state`, `split.val_size`), `sha256_val_ids` jest 64-hex,
    a `n_train + n_val` (+ opcjonalne `n_excluded`, domyślnie 0) równa się
    `dataset.files.train.n_rows` — grupowany podział nie gubi ani nie dubluje wierszy; wiersze
-   wyłączone świadomie muszą być zadeklarowane w manifeście, nie znikać po cichu.
+   wyłączone świadomie muszą być zadeklarowane w manifeście, nie znikać po cichu. Od 4.10:
+   faktyczny udział walidacji `n_val / (n_train + n_val)` mieści się w `val_size` ± 0,01
+   (droga podziału: reprezentanci grup + stratyfikowany `train_test_split`, decyzja 4.10).
 4. Jeśli istnieje `configs/label_map.json` (powstaje w W1), ma dokładnie `dataset.n_classes`
    unikalnych nazw, a id to dokładnie 0..n_classes-1 bez luk i powtórzeń. Akceptowane formaty:
-   obiekt JSON `{nazwa: id}` albo lista nazw (pozycja = id).
+   obiekt JSON `{nazwa: id}` albo lista nazw (pozycja = id). Od 4.10: id idą w kolejności
+   `sorted()` nazw (porządek kodów Unicode, nie locale) — mapę da się odtworzyć bez pliku.
 5. `split.val_size` mieści się w (0, 0.3): walidacja ~15% z 10 003 wierszy; poza tym zakresem
    albo brakuje danych treningowych, albo walidacja jest za mała na 77 klas.
 
@@ -64,6 +67,9 @@ ALLOW_MARKER = "allow-testset"
 # które MOGĄ znać plik testowy: ewaluacja końcowa, loader/audyt danych.
 EXEMPT_PATH_PARTS = frozenset({"evaluation", "data", "audit"})
 MANIFEST_REQUIRED_KEYS = {"seed", "val_size", "n_train", "n_val", "sha256_val_ids"}
+# Droga podziału (decyzja Marcina 4.10): reprezentanci grup + stratyfikowany train_test_split
+# z val_size z configu -> faktyczny udział val ~ val_size; zapas na grupy wielowierszowe.
+VAL_SHARE_TOLERANCE = 0.01
 
 _HEX40 = re.compile(r"^[0-9a-f]{40}$")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -197,6 +203,11 @@ def test_split_manifest_if_present_matches_config():
         f"dataset.files.train.n_rows={n_expected} — podział zgubił lub zdublował wiersze "
         "(wiersze wyłączone świadomie deklaruj w manifeście jako n_excluded)"
     )
+    share, target = n_val / (n_train + n_val), float(split["val_size"])
+    assert abs(share - target) <= VAL_SHARE_TOLERANCE, (
+        f"udział walidacji {share:.4f} poza val_size={target} ± {VAL_SHARE_TOLERANCE} "
+        "(reprezentanci grup + stratyfikowany train_test_split powinny dać ~val_size)"
+    )
 
 
 # (d) mapa etykiet: n_classes unikalnych nazw, id 0..n_classes-1 --------------------------
@@ -226,6 +237,18 @@ def test_label_map_if_present_is_bijection_0_to_n_classes():
     assert all(name.strip() for name in names), "label_map.json: pusta nazwa kategorii"
     assert sorted(ids) == list(range(n_classes)), (
         f"label_map.json: id muszą być dokładnie 0..{n_classes - 1} bez luk i powtórzeń"
+    )
+
+
+def test_label_map_if_present_ids_follow_sorted_names():
+    """Decyzja Marcina 4.10: id = pozycja nazwy na liście `sorted()` (kody Unicode, nie locale).
+    Mapę da się odtworzyć z samych nazw; ręczna zmiana kolejności = czerwony hook."""
+    if not LABEL_MAP_PATH.exists():
+        return  # mapa powstaje w W1; przed tym test jest pusty, nie czerwony
+    pairs = _label_pairs(json.loads(LABEL_MAP_PATH.read_text(encoding="utf-8")))
+    names_by_id = [name for name, _ in sorted(pairs, key=lambda pair: pair[1])]
+    assert names_by_id == sorted(names_by_id), (
+        "label_map.json: id nie idą w kolejności sorted() nazw kategorii"
     )
 
 

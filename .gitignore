@@ -11,10 +11,14 @@ dist/
 
 # dane i artefakty (poza repo); /models/ zakotwiczone do roota —
 # bez ukośnika wzorzec ignorowałby też pakiet źródłowy src/banking77_intent_ml/models/
-dane/
-# jawnie (choć dane/ już je obejmuje): surowe CSV BANKING77 z scripts/fetch_data.py i indeksy splitu
-dane/banking77/
-dane/splits/
+# dane/: surowe CSV BANKING77 z scripts/fetch_data.py — poza repo. WYJĄTEK (decyzja 4.10.2026):
+# indeksy splitu dane/splits/*.json (same numery wierszy, bez tekstów) są w gicie. Samo
+# `!dane/splits/*.json` przy wzorcu `dane/` NIE działa (git nie wchodzi do wykluczonego katalogu),
+# stąd: dane/* + negacja katalogu splits + ponowne wykluczenie jego treści + negacja *.json.
+dane/*
+!dane/splits/
+dane/splits/*
+!dane/splits/*.json
 /models/
 mlruns/
 *.joblib
