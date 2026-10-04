@@ -1,19 +1,23 @@
-"""Strażnik protokołu ewaluacji BANKING77 (stan 30.09.2026).
+"""Strażnik protokołu ewaluacji BANKING77 (stan 30.09.2026; pkt 2 rozszerzony 4.10.2026).
 
 Test infra, szybki (<1 s), bez sieci i bez danych — uruchamia go hook PostToolUse po każdej
-edycji w src/, configs/ i tests/ (czerwony = exit 2 = blokada). Zastępuje poprzedni test
-kontraktu predykcji US Accidents (grep po `forbidden_features`).
+edycji w src/, configs/ i tests/. Czerwony = exit 2 = raport błędu do modelu, NIE blokada:
+PostToolUse niczego nie cofa (plik jest już zapisany), więc czerwony hook = stop i naprawa.
+Zastępuje poprzedni test kontraktu predykcji US Accidents (grep po `forbidden_features`).
 
 Co ten test DOWODZI:
 1. `configs/config.yaml` przypina źródło danych: commit (40 hex) i sumy SHA-256 (64 hex) obu
    plików — nikt nie podmieni danych "po cichu" bez zmiany w gicie.
 2. Żaden moduł w `src/` poza zwolnionymi nie odwołuje się LITERALNIE do pliku testowego ani do
    plików od niego pochodnych (`test.csv`, nazwa pliku testowego z configu, `dataset.test`,
-   nazwy plików `evaluation.clean_test_subset_path` i `llm.eval_ids_path`). Zwolnienie dotyczy
-   KATALOGU lub MODUŁU o nazwie dokładnie `evaluation`, `data` albo `audit` (części ścieżki
-   względem `src/` i nazwa pliku bez `.py`) — nie dowolnej ścieżki zawierającej ten ciąg
-   (`models/metadata.py` NIE jest zwolniony). Kod modeli/cech/API nie powinien w ogóle wiedzieć,
-   że test istnieje. Świadome odstępstwo: komentarz `# allow-testset` w tej samej linii.
+   nazwy plików `evaluation.clean_test_subset_path` i `llm.eval_ids_path`, a od 4.10 także same
+   nazwy tych dwóch kluczy: kod bierze ścieżki z settings, np. `settings.llm.eval_ids_path`,
+   więc nazwa pliku by się w nim nie pojawiła). Zwolnienie dotyczy KATALOGU lub MODUŁU
+   o nazwie dokładnie `evaluation`, `data` albo `audit` (części ścieżki względem `src/` i nazwa
+   pliku bez `.py`) — nie dowolnej ścieżki zawierającej ten ciąg (`models/metadata.py` NIE jest
+   zwolniony). Kod modeli/cech/API nie powinien w ogóle wiedzieć, że test istnieje. Świadome
+   odstępstwo: komentarz `# allow-testset` w tej samej linii (tak oznaczone są definicje obu
+   pól w `config/settings.py`).
 3. Jeśli istnieje `configs/split_manifest.json` (powstaje w W1 z `make_splits`), ma wymagane
    klucze (`seed`, `val_size`, `n_train`, `n_val`, `sha256_val_ids`), `seed` i `val_size` zgadzają
    się z configiem (`split.random_state`, `split.val_size`), `sha256_val_ids` jest 64-hex,
@@ -28,7 +32,8 @@ Co ten test DOWODZI:
 
 Czego ten test NIE DOWODZI (i co pilnuje człowiek + /review-ml):
 - że test set nie uczestniczy w fit/HPO/doborze promptu pośrednio (wczytanie przez zmienną,
-  f-string, konkatenację, DataFrame przekazany z zewnątrz) — skan jest literalny;
+  np. `ds = settings.dataset; ds.test`, f-string, konkatenację, DataFrame przekazany
+  z zewnątrz) — skan jest literalny;
 - że indeksy w `dane/splits/` faktycznie odpowiadają manifestowi (to sprawdza osobny test
   z danymi, uruchamiany ręcznie po `fetch_data` + `make_splits`);
 - że TF-IDF/tokenizer był dopasowany tylko na train — to własność kodu pipeline'u, nie pliku;
@@ -88,10 +93,16 @@ def test_dataset_files_have_sha256_64_hex():
 
 
 def _forbidden_testset_literals(cfg: dict) -> set[str]:
-    """Literały, których kod poza evaluation/data/audit nie ma prawa zawierać."""
+    """Literały, których kod poza evaluation/data/audit nie ma prawa zawierać.
+
+    Dla podzbiorów pochodnych (3 055 / 385) zakazana jest nazwa pliku ORAZ nazwa klucza:
+    kod bierze ścieżki z settings (`settings.llm.eval_ids_path`), więc sama nazwa pliku
+    by się w nim nie pojawiła. Pola settings odwzorowują klucze YAML 1:1.
+    """
     literals = {"test.csv", "dataset.test"}
     literals.add(Path(str(cfg["dataset"]["files"]["test"]["path"])).name)
     for section, key in (("evaluation", "clean_test_subset_path"), ("llm", "eval_ids_path")):
+        literals.add(key)  # dostęp przez settings albo dict configu
         derived = cfg.get(section, {}).get(key)
         if derived:
             literals.add(Path(str(derived)).name)
@@ -116,6 +127,21 @@ def test_is_exempt_matches_whole_path_parts_only():
     assert not _is_exempt(pkg / "models" / "metadata.py")  # "data" jako podciąg nie zwalnia
     assert not _is_exempt(pkg / "api" / "data_models.py")
     assert not _is_exempt(pkg / "features" / "dataset_stats.py")
+
+
+def test_forbidden_literals_catch_settings_access_paths():
+    """Samokontrola skanu (bez plików na dysku): dostęp do testu i podzbiorów 3 055 / 385
+    przez settings albo dict configu jest łapany; dostęp do train — nie."""
+    literals = _forbidden_testset_literals(_config())
+
+    def caught(line: str) -> bool:
+        return any(lit in line for lit in literals)
+
+    assert caught("df = pd.read_csv(raw_dir / settings.dataset.test.filename)")
+    assert caught("ids = json.loads(settings.evaluation.clean_test_subset_path.read_text())")
+    assert caught("ids = json.loads(settings.llm.eval_ids_path.read_text())")
+    assert caught('ids = cfg["llm"]["eval_ids_path"]')
+    assert not caught("df = pd.read_csv(raw_dir / settings.dataset.train.filename)")
 
 
 def test_src_outside_evaluation_data_audit_does_not_reference_testset():

@@ -78,7 +78,7 @@ class EvaluationConfig:
     primary_metric: str
     selection_metric: str
     secondary_metrics: tuple[str, ...]
-    clean_test_subset_path: Path
+    clean_test_subset_path: Path  # allow-testset
     n_clean_test_expected: int
 
 
@@ -122,7 +122,7 @@ class LlmConfig:
     model: str
     n_eval: int
     per_class: int
-    eval_ids_path: Path
+    eval_ids_path: Path  # allow-testset
 
 
 @dataclass(frozen=True)
@@ -214,7 +214,7 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
             primary_metric=ev["primary_metric"],
             selection_metric=ev["selection_metric"],
             secondary_metrics=tuple(ev["secondary_metrics"]),
-            clean_test_subset_path=_abs(ev["clean_test_subset_path"]),
+            clean_test_subset_path=_abs(ev["clean_test_subset_path"]),  # allow-testset
             n_clean_test_expected=int(ev["n_clean_test_expected"]),
         ),
         models=ModelsConfig(
@@ -243,7 +243,7 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
             model=llm["model"],
             n_eval=int(llm["n_eval"]),
             per_class=int(llm["per_class"]),
-            eval_ids_path=_abs(llm["eval_ids_path"]),
+            eval_ids_path=_abs(llm["eval_ids_path"]),  # allow-testset
         ),
         mlflow=MlflowConfig(
             tracking_uri=_abs(raw["paths"]["mlruns"]).as_uri(),
