@@ -273,10 +273,26 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
 - [x] **30.09:** decyzja o zmianie tematu na BANKING77 · **2.10:** nowy plan-of-record, config,
       strażnik protokołu (`tests/test_contract.py`) i `scripts/fetch_data.py` w repo
 - [ ] **ADR-0001 — szkic** (kontekst i opcje zestawione z notatek researchu; sekcje *Decyzja*
-      i *Konsekwencje* do dopisania przez autora, status → zaakceptowany) — termin: przed bramką 4.10
-- [ ] **W1** (pt 2.10 wieczór + weekend 3–4.10): fetch → EDA + audyt jakości → mapa etykiet
-      → `make_splits` + manifest → TF-IDF baseline w MLflow → zapis/odczyt → test DistilBERT na GPU
-      → **bramka 4.10**
+      i *Konsekwencje* do dopisania przez autora, status → zaakceptowany) — termin: przed bramką
+      po W1 (przesuniętą na pt 9.10)
+- [ ] **ADR-0002 — protokół ewaluacji** (grupowany split, grupa konfliktowa, mapa etykiet,
+      podzbiory testowe; decyzje autora z 4.10) — autor, wieczory 5–9.10
+- [ ] **W1** (pt 2.10 wieczór + weekend 3–4.10; domknięcie w wieczory 5–9.10):
+  - [x] dane pobrane i zweryfikowane (`scripts/fetch_data.py`: SHA-256, 10 003 / 3 080 wierszy)
+  - [x] loader z walidacją struktury (`data/loader.py`) + testy na sztucznych CSV
+  - [x] mapa etykiet `configs/label_map.json` (77 kategorii, id wg `sorted()` nazw)
+  - [x] zamrożony split train/val (`scripts/make_splits.py`): 8 504 / 1 499, 9 972 grupy
+    duplikatów (31 nadmiarowych), grupa konfliktowa w train; indeksy w `dane/splits/` (w gicie)
+    + `configs/split_manifest.json`; ponowne uruchomienie tylko weryfikuje („zgodny”)
+  - [x] strażnik protokołu zielony na realnych plikach (zakres rozszerzony 4.10)
+  - [ ] podzbiory testowe 3 055 / 385 + audyt nazw kategorii testu (S2)
+  - [ ] `evaluate()` + Dummy ×2 i TF-IDF+LR w MLflow; test zapisu/odczytu modelu
+  - [ ] test uruchomienia DistilBERT na GPU; krótka EDA z wnioskami (`notebooks/01_eda.ipynb`)
+  - **Bramka po W1 nie przeszła 4.10** (brak baseline'u w MLflow i testu zapisu/odczytu; dane
+    i split odtwarzalne) — decyzja autora: warunkowo kontynuujemy, bramka powtórzona najpóźniej
+    w pt 9.10, W2 od 10.10 tylko po zielonej bramce
+  - Co nie zadziałało: twarde minimum nie zmieściło się w weekendzie 3–4.10 — baseline
+    w MLflow i zapis/odczyt przechodzą na wieczory 5–9.10 (pierwsze do cięcia: DistilBERT, EDA)
 - [x] **2.10 — zależności pod BANKING77**: z zależności głównych usunięte `xgboost`, `duckdb`,
       `pygeohash`; dodany extra `serving` (`fastapi`, `uvicorn[standard]`, `httpx` — wymagany przez
       `TestClient`); `optuna` zostaje do decyzji przy HPO w W2 (Optuna czy siatka)
@@ -290,7 +306,7 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
 - [x] **2.10 — porządki po poprzednim temacie**: notebook EDA, `csv_to_parquet.py`, `sanity_w1.py`
       i loader US Accidents usunięte z repo (treść w historii gita do commita `5c94e05`; kopie
       robocze i dane poza repo). Loader BANKING77 i nowy `notebooks/01_eda.ipynb` powstają w W1
-- Rezerwa: zużyto **0 z 8 h** (aktualizacja na koniec każdego slotu)
+- Rezerwa: zużyto **0 z 8 h** (stan po weekendzie W1, 4.10; aktualizacja na koniec każdego slotu)
 
 **Wyniki na walidacji** (W1–W2; zamrożona walidacja z manifestu — do wyboru konfiguracji,
 nie do porównań z literaturą; wszystkie liczby z MLflow):
