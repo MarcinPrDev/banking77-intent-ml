@@ -9,15 +9,16 @@ Co ten test DOWODZI:
 1. `configs/config.yaml` przypina źródło danych: commit (40 hex) i sumy SHA-256 (64 hex) obu
    plików — nikt nie podmieni danych "po cichu" bez zmiany w gicie.
 2. Żaden moduł w `src/` poza zwolnionymi nie odwołuje się LITERALNIE do pliku testowego ani do
-   plików od niego pochodnych (`test.csv`, nazwa pliku testowego z configu, `dataset.test`,
-   nazwy plików `evaluation.clean_test_subset_path` i `llm.eval_ids_path`, a od 4.10 także same
-   nazwy tych dwóch kluczy: kod bierze ścieżki z settings, np. `settings.llm.eval_ids_path`,
-   więc nazwa pliku by się w nim nie pojawiła). Zwolnienie dotyczy KATALOGU lub MODUŁU
-   o nazwie dokładnie `evaluation`, `data` albo `audit` (części ścieżki względem `src/` i nazwa
-   pliku bez `.py`) — nie dowolnej ścieżki zawierającej ten ciąg (`models/metadata.py` NIE jest
-   zwolniony). Kod modeli/cech/API nie powinien w ogóle wiedzieć, że test istnieje. Świadome
-   odstępstwo: komentarz `# allow-testset` w tej samej linii (tak oznaczone są definicje obu
-   pól w `config/settings.py`).
+   plików od niego pochodnych: `test.csv`, nazwa pliku testowego z configu, `dataset.test`,
+   funkcja `load_test` (jedyna droga do testu w `data/loader.py`, decyzja 4.10), nazwy plików
+   `evaluation.clean_test_subset_path` i `llm.eval_ids_path` oraz — od 4.10 — same nazwy tych
+   dwóch kluczy (kod bierze ścieżki z settings, np. `settings.llm.eval_ids_path`, więc nazwa
+   pliku by się w nim nie pojawiła). Zwolnienie dotyczy KATALOGU lub MODUŁU o nazwie dokładnie
+   `evaluation`, `data` albo `audit` (części ścieżki względem `src/` i nazwa pliku bez `.py`)
+   — nie dowolnej ścieżki zawierającej ten ciąg (`models/metadata.py` NIE jest zwolniony).
+   Kod modeli/cech/API nie powinien w ogóle wiedzieć, że test istnieje. Świadome odstępstwo:
+   komentarz `# allow-testset` w tej samej linii (tak oznaczone są definicje obu pól
+   w `config/settings.py`).
 3. Jeśli istnieje `configs/split_manifest.json` (powstaje w W1 z `make_splits`), ma wymagane
    klucze (`seed`, `val_size`, `n_train`, `n_val`, `sha256_val_ids`), `seed` i `val_size` zgadzają
    się z configiem (`split.random_state`, `split.val_size`), `sha256_val_ids` jest 64-hex,
@@ -98,8 +99,9 @@ def _forbidden_testset_literals(cfg: dict) -> set[str]:
     Dla podzbiorów pochodnych (3 055 / 385) zakazana jest nazwa pliku ORAZ nazwa klucza:
     kod bierze ścieżki z settings (`settings.llm.eval_ids_path`), więc sama nazwa pliku
     by się w nim nie pojawiła. Pola settings odwzorowują klucze YAML 1:1.
+    `load_test` = jedyna droga do testu w `data/loader.py` (decyzja Marcina 4.10.2026).
     """
-    literals = {"test.csv", "dataset.test"}
+    literals = {"test.csv", "dataset.test", "load_test"}
     literals.add(Path(str(cfg["dataset"]["files"]["test"]["path"])).name)
     for section, key in (("evaluation", "clean_test_subset_path"), ("llm", "eval_ids_path")):
         literals.add(key)  # dostęp przez settings albo dict configu
@@ -130,8 +132,8 @@ def test_is_exempt_matches_whole_path_parts_only():
 
 
 def test_forbidden_literals_catch_settings_access_paths():
-    """Samokontrola skanu (bez plików na dysku): dostęp do testu i podzbiorów 3 055 / 385
-    przez settings albo dict configu jest łapany; dostęp do train — nie."""
+    """Samokontrola skanu (bez plików na dysku): dostęp do testu (także przez `load_test`)
+    i podzbiorów 3 055 / 385 przez settings albo dict configu jest łapany; do train — nie."""
     literals = _forbidden_testset_literals(_config())
 
     def caught(line: str) -> bool:
@@ -141,7 +143,9 @@ def test_forbidden_literals_catch_settings_access_paths():
     assert caught("ids = json.loads(settings.evaluation.clean_test_subset_path.read_text())")
     assert caught("ids = json.loads(settings.llm.eval_ids_path.read_text())")
     assert caught('ids = cfg["llm"]["eval_ids_path"]')
+    assert caught("df = load_test()")
     assert not caught("df = pd.read_csv(raw_dir / settings.dataset.train.filename)")
+    assert not caught("df = load_train()")
 
 
 def test_src_outside_evaluation_data_audit_does_not_reference_testset():
