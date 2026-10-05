@@ -181,7 +181,9 @@ Od W2: `uv run uvicorn ...` z modelem baseline; od W3: `docker build` + `docker 
 
 Podział pracy: dane/protokół/EDA **10 h** · modele/HPO **12 h** · ewaluacja i analiza błędów **6 h**
 · pakiet/API/testy **8 h** · Docker/kind/CI **9 h** · raport/demo **7 h** · rezerwa **8 h**.
-Godziny slotu obejmują weekend i krótkie wieczory danego tygodnia. Nazwy slotów W1–W5 są
+Godziny slotu obejmują weekend i wieczory danego tygodnia — od 5.10.2026 każdy wieczór pn–pt
+(także piątek) jest roboczy (~1–1,5 h, jedno małe zadanie; rozkład dzienny w playbookach slotów
+i w kalendarzu), a godziny ponad budżet slotu idą do księgi rezerwy. Nazwy slotów W1–W5 są
 używane przez skille (`/start-etapu Wn`) i kalendarz.
 
 | Slot | Termin | h | Wymagany rezultat (definicja „done") |
