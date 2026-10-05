@@ -163,6 +163,10 @@ Jeśli wygra DistilBERT, obraz musi mieć torch CPU — rozmiar i czas budowy **
 ```bash
 # Środowisko lokalne (Python 3.11, uv) — JEDNA komenda z pełną listą extras używanych lokalnie:
 uv sync --extra dev --extra nlp --extra gpu --extra serving
+# Jednorazowo po klonie: filtr gita czyści wyjścia notebooków przy commicie (lokalnie zostają);
+# --keep-id zachowuje identyfikatory komórek (bez niego nbstripout numeruje je od nowa)
+uv run nbstripout --install --attributes .gitattributes
+git config filter.nbstripout.clean "$(git config filter.nbstripout.clean) --keep-id"
 uv run python scripts/fetch_data.py        # train.csv + test.csv z przypiętego commitu, weryfikacja SHA-256
 uv run pytest                              # strażnik protokołu + testy dymne
 uv run ruff check .
