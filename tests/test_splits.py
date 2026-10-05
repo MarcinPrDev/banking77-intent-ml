@@ -20,6 +20,7 @@ from banking77_intent_ml.data.splits import (
     ids_sha256,
     make_splits,
     normalize_text,
+    write_or_verify_ids,
     write_or_verify_split,
 )
 
@@ -129,3 +130,19 @@ def test_verify_keeps_later_fields_and_only_reports_versions(tmp_path):
     after = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert after["test_subsets"] == {"n_clean": 3055}
     assert any("versions" in line for line in report)
+
+
+def test_fields_of_another_step_are_appended_without_versions_note(tmp_path):
+    df, settings = _frame(), load_settings()
+    manifest_path = tmp_path / "split_manifest.json"
+    result = _split(df)
+    write_or_verify_split(
+        result,
+        build_manifest(result, df, settings),
+        splits_dir=tmp_path / "splits",
+        manifest_path=manifest_path,
+    )
+    report = write_or_verify_ids(  # krok bez pola "versions" (np. S2)
+        {tmp_path / "extra_ids.json": [1, 2]}, {"n_extra": 2}, manifest_path=manifest_path
+    )
+    assert report == ["extra_ids.json: zapisano", "split_manifest.json: uzupełniono"]

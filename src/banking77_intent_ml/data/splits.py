@@ -182,24 +182,34 @@ def _read_json(path: Path):
 def write_or_verify_split(
     result: SplitResult, manifest: dict, *, splits_dir: Path, manifest_path: Path
 ) -> list[str]:
-    """Zapisuje brakujące pliki splitu i pola manifestu; istniejące tylko weryfikuje.
+    """Pliki train/val i pola manifestu z `make_splits` — zapis albo weryfikacja (niżej)."""
+    id_files = {
+        splits_dir / TRAIN_IDS_FILE: result.train_ids,
+        splits_dir / VAL_IDS_FILE: result.val_ids,
+    }
+    return write_or_verify_ids(id_files, manifest, manifest_path=manifest_path)
+
+
+def write_or_verify_ids(
+    id_files: dict[Path, list[int]], manifest: dict, *, manifest_path: Path
+) -> list[str]:
+    """Zapisuje brakujące pliki z indeksami i pola manifestu; istniejące tylko weryfikuje.
 
     Faza 1 sprawdza wszystko, co już istnieje: różnica w indeksach albo w polach manifestu
     (poza informacyjnymi, np. `versions`) -> `SplitError`, zanim cokolwiek zostanie zapisane.
-    Faza 2 zapisuje tylko brakujące pliki i pola — pola dopisane później (np. podzbiory
+    Faza 2 zapisuje tylko brakujące pliki i pola — pola innych kroków (split z S1, podzbiory
     testowe z S2) zostają nietknięte. Zwraca linie raportu.
     """
     report: list[str] = []
     to_write: dict[Path, str] = {}
 
-    for name, ids in ((TRAIN_IDS_FILE, result.train_ids), (VAL_IDS_FILE, result.val_ids)):
-        path = splits_dir / name
+    for path, ids in id_files.items():
         if not path.exists():
             to_write[path] = _dump(ids, compact=True)
         elif _read_json(path) != ids:
             raise SplitError(f"{path}: zamrożone indeksy różnią się od wyniku — nie nadpisuję")
         else:
-            report.append(f"{name}: zgodny z zamrożonym plikiem")
+            report.append(f"{path.name}: zgodny z zamrożonym plikiem")
 
     existing = _read_json(manifest_path) if manifest_path.exists() else {}
     changed = [
@@ -209,8 +219,8 @@ def write_or_verify_split(
     ]
     if changed:
         raise SplitError(f"{manifest_path}: pola różne od zamrożonych {changed} — nie nadpisuję")
-    for key in sorted(_INFORMATIONAL_KEYS & existing.keys()):
-        if existing[key] != manifest.get(key):
+    for key in sorted(_INFORMATIONAL_KEYS & existing.keys() & manifest.keys()):
+        if existing[key] != manifest[key]:
             report.append(f"{manifest_path.name}: '{key}' inne niż przy zamrożeniu (informacyjnie)")
     missing = {key: value for key, value in manifest.items() if key not in existing}
     if missing:
@@ -221,5 +231,6 @@ def write_or_verify_split(
     for path, text in to_write.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8", newline="\n")
-        report.append(f"{path.name}: zapisano")
+        verb = "uzupełniono" if path == manifest_path and existing else "zapisano"
+        report.append(f"{path.name}: {verb}")
     return report
