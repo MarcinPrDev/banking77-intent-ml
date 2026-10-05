@@ -199,5 +199,28 @@
     "numpy": "2.4.6",
     "pandas": "2.3.3",
     "scikit-learn": "1.9.0"
+  },
+  "n_test_clean": 3055,
+  "sha256_test_clean_ids": "141ad8139043e0955f88fee8beed0d87070936de453f4fd30adade6f16fa0aa9",
+  "n_llm_eval": 385,
+  "sha256_llm_eval_ids": "a4b7bdd63587d8abcf653f19e4058499f408b8c29f55a7127672d1a3d566ddd0",
+  "test_subsets": {
+    "files": {
+      "dir": "paths.splits_dir (config)",
+      "test_clean": "test_clean_ids.json",
+      "llm_eval": "llm_eval_ids.json"
+    },
+    "clean_rule": "test bez odpowiednika w całym train.csv po normalizacji z configu (decyzja autora 5.10.2026)",
+    "llm_rule": "llm.per_class na klasę z czystego podzbioru; pandas groupby(category).sample(n=per_class, random_state=split.random_state) (decyzja autora 5.10.2026)",
+    "llm_per_class": 5,
+    "llm_seed": 42,
+    "n_overlap_with_train": 25,
+    "n_overlap_label_mismatch": 0
+  },
+  "test_audit": {
+    "n_rows": 3080,
+    "n_classes": 77,
+    "rows_per_class": 40,
+    "names_match_label_map": true
   }
 }

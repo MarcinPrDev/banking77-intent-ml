@@ -27,6 +27,9 @@ Co ten test DOWODZI:
    wyłączone świadomie muszą być zadeklarowane w manifeście, nie znikać po cichu. Od 4.10:
    faktyczny udział walidacji `n_val / (n_train + n_val)` mieści się w `val_size` ± 0,01
    (droga podziału: reprezentanci grup + stratyfikowany `train_test_split`, decyzja 4.10).
+   Od 5.10 (S2) obowiązkowe są też podzbiory testowe ustalone z góry: `n_test_clean` ==
+   `evaluation.n_clean_test_expected`, `n_llm_eval` == `llm.n_eval`, a `sha256_test_clean_ids`
+   i `sha256_llm_eval_ids` są 64-hex (decyzja 5.10).
 4. Jeśli istnieje `configs/label_map.json` (powstaje w W1), ma dokładnie `dataset.n_classes`
    unikalnych nazw, a id to dokładnie 0..n_classes-1 bez luk i powtórzeń. Akceptowane formaty:
    obiekt JSON `{nazwa: id}` albo lista nazw (pozycja = id). Od 4.10: id idą w kolejności
@@ -66,7 +69,18 @@ ALLOW_MARKER = "allow-testset"
 # Dokładne nazwy katalogów (części ścieżki względem src/) lub modułów (nazwa pliku bez .py),
 # które MOGĄ znać plik testowy: ewaluacja końcowa, loader/audyt danych.
 EXEMPT_PATH_PARTS = frozenset({"evaluation", "data", "audit"})
-MANIFEST_REQUIRED_KEYS = {"seed", "val_size", "n_train", "n_val", "sha256_val_ids"}
+MANIFEST_REQUIRED_KEYS = {
+    "seed",
+    "val_size",
+    "n_train",
+    "n_val",
+    "sha256_val_ids",
+    # S2 (decyzja Marcina 5.10): podzbiory testowe ustalone z góry, przed jakimkolwiek treningiem
+    "n_test_clean",
+    "sha256_test_clean_ids",
+    "n_llm_eval",
+    "sha256_llm_eval_ids",
+}
 # Droga podziału (decyzja Marcina 4.10): reprezentanci grup + stratyfikowany train_test_split
 # z val_size z configu -> faktyczny udział val ~ val_size; zapas na grupy wielowierszowe.
 VAL_SHARE_TOLERANCE = 0.01
@@ -191,7 +205,16 @@ def test_split_manifest_if_present_matches_config():
     assert abs(float(manifest["val_size"]) - float(split["val_size"])) < 1e-9, (
         f"manifest.val_size={manifest['val_size']} != config.split.val_size={split['val_size']}"
     )
-    assert _HEX64.match(str(manifest["sha256_val_ids"])), "sha256_val_ids nie jest 64-hex"
+    for key in ("sha256_val_ids", "sha256_test_clean_ids", "sha256_llm_eval_ids"):
+        assert _HEX64.match(str(manifest[key])), f"{key} nie jest 64-hex"
+    expected_clean = int(cfg["evaluation"]["n_clean_test_expected"])
+    assert int(manifest["n_test_clean"]) == expected_clean, (
+        f"manifest.n_test_clean={manifest['n_test_clean']} != "
+        f"evaluation.n_clean_test_expected={expected_clean}"
+    )
+    assert int(manifest["n_llm_eval"]) == int(cfg["llm"]["n_eval"]), (
+        f"manifest.n_llm_eval={manifest['n_llm_eval']} != llm.n_eval={cfg['llm']['n_eval']}"
+    )
 
     n_train, n_val = int(manifest["n_train"]), int(manifest["n_val"])
     n_excluded = int(manifest.get("n_excluded", 0))
