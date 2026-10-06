@@ -60,7 +60,8 @@ class PathsConfig:
     raw_dir: Path
     splits_dir: Path
     models_dir: Path
-    mlruns: Path
+    mlruns: Path  # artefakty runów MLflow (tabele, pliki)
+    mlflow_db: Path  # baza SQLite z runami MLflow (parametry, metryki, tagi)
 
 
 @dataclass(frozen=True)
@@ -127,11 +128,14 @@ class LlmConfig:
 
 @dataclass(frozen=True)
 class MlflowConfig:
-    # Jedyne pole WYPROWADZONE, nie przepisane z YAML: bezwzględny URI `file:///.../mlruns`
-    # zbudowany z `paths.mlruns`. Goły względny napis MLflow rozwiązuje względem cwd procesu
-    # (run z notebooks/ tworzyłby drugi store) — dlatego config nie ma klucza `mlflow.tracking_uri`.
-    # Użycie: `mlflow.set_tracking_uri(settings.mlflow.tracking_uri)` na starcie skryptu/notebooka.
+    # Pola WYPROWADZONE z `paths`, nie przepisane z YAML (jedno źródło ścieżek; decyzja 6.10.2026):
+    # - tracking_uri = `sqlite:///<bezwzględna paths.mlflow_db>` — MLflow 3.14 odrzuca magazyn
+    #   plikowy, a bez jawnego URI zapisuje do `mlflow.db` w cwd procesu (np. w notebooks/);
+    # - artifact_location = bezwzględny `file:///…/mlruns` dla eksperymentu — inaczej artefakty
+    #   lądowałyby względem cwd procesu.
+    # Użycie: `configure_mlflow(settings)` z `evaluation/tracking.py` na starcie skryptu/notebooka.
     tracking_uri: str
+    artifact_location: str
     experiment: str
 
 
@@ -201,6 +205,7 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
             splits_dir=_abs(raw["paths"]["splits_dir"]),
             models_dir=_abs(raw["paths"]["models_dir"]),
             mlruns=_abs(raw["paths"]["mlruns"]),
+            mlflow_db=_abs(raw["paths"]["mlflow_db"]),
         ),
         split=SplitConfig(
             val_size=float(sp["val_size"]),
@@ -246,7 +251,8 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
             eval_ids_path=_abs(llm["eval_ids_path"]),  # allow-testset
         ),
         mlflow=MlflowConfig(
-            tracking_uri=_abs(raw["paths"]["mlruns"]).as_uri(),
+            tracking_uri="sqlite:///" + _abs(raw["paths"]["mlflow_db"]).as_posix(),
+            artifact_location=_abs(raw["paths"]["mlruns"]).as_uri(),
             experiment=raw["mlflow"]["experiment"],
         ),
         api=ApiConfig(

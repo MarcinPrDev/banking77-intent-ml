@@ -32,10 +32,12 @@ paths:
   raw_dir: dane/banking77                  # surowe CSV (poza gitem) — pobiera scripts/fetch_data.py
   splits_dir: dane/splits                  # indeksy zamrożonego splitu (poza gitem; deny na Edit/Write)
   models_dir: models                       # artefakty wybrane do wdrożenia (poza gitem; /models/ w .gitignore)
-  # Lokalny tracking MLflow (poza gitem). JEDYNE źródło ścieżki store'u: settings.py buduje z niej
-  # bezwzględny URI file:///... (settings.mlflow.tracking_uri). Goły względny napis "mlruns" MLflow
-  # rozwiązuje względem cwd procesu — run z notebooks/ tworzyłby drugi store notebooks/mlruns/.
+  # Lokalny tracking MLflow (poza gitem; decyzja 6.10.2026): runy w bazie SQLite `mlflow_db`,
+  # artefakty (tabele, pliki) w `mlruns`. settings.py buduje z nich bezwzględne URI
+  # (settings.mlflow.tracking_uri / artifact_location) — MLflow 3.14 odrzuca magazyn plikowy,
+  # a bez jawnego URI zapisuje do mlflow.db w cwd procesu (np. w notebooks/).
   mlruns: mlruns
+  mlflow_db: mlflow.db
 
 split:
   # Z oryginalnego train wydzielamy walidację; test.csv NIE uczestniczy w żadnym splicie.
@@ -99,8 +101,8 @@ llm:
   eval_ids_path: dane/splits/llm_eval_ids.json
 
 mlflow:
-  # tracking_uri NIE jest kluczem configu: settings.mlflow.tracking_uri = file:// URI z paths.mlruns
-  # (jedno źródło ścieżki). W kodzie: mlflow.set_tracking_uri(settings.mlflow.tracking_uri).
+  # tracking_uri i artifact_location NIE są kluczami configu — settings wyprowadza je z paths
+  # (jedno źródło ścieżek). W kodzie: configure_mlflow(settings) z evaluation/tracking.py.
   experiment: banking77-intent
 
 api:

@@ -31,9 +31,11 @@ def test_settings_load() -> None:
     assert isinstance(s.paths.raw_dir, Path) and s.paths.raw_dir.is_absolute()
     assert s.split.manifest_path.name == "split_manifest.json"
 
-    # MLflow: tracking URI wyprowadzony z paths.mlruns jako bezwzględny file:// (nie goły napis)
-    assert s.paths.mlruns.is_absolute()
-    assert s.mlflow.tracking_uri.startswith("file:")
+    # MLflow (decyzja 6.10): runy w SQLite z paths.mlflow_db, artefakty w paths.mlruns — oba
+    # jako bezwzględne URI, nie gołe napisy rozwiązywane względem cwd
+    assert s.paths.mlruns.is_absolute() and s.paths.mlflow_db.is_absolute()
+    assert s.mlflow.tracking_uri == "sqlite:///" + s.paths.mlflow_db.as_posix()
+    assert s.mlflow.artifact_location == s.paths.mlruns.as_uri()
     assert s.mlflow.experiment
 
     # protokół — typy/zakresy, nie wartości (wartości: config; zakres val_size: test kontraktu)

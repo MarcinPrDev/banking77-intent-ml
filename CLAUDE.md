@@ -46,9 +46,11 @@ Repo i pakiet przemianowane 2.10.2026 (wcześniej `us-accidents-ml` / `us_accide
   po każdym sync na GPU sprawdź `torch.cuda.is_available()`. `uv run` jest bezpieczny (inexact).
   Extras: `nlp` (sentence-transformers), `gpu` (torch cu128 + transformers), `llm` (groq + litellm),
   `serving` (fastapi, uvicorn, httpx).
-- MLflow: `mlflow.set_tracking_uri(settings.mlflow.tracking_uri)` na starcie każdego skryptu
-  i notebooka (bezwzględny `file://` URI z `paths.mlruns`) — nigdy goły napis `mlruns`, bo MLflow
-  rozwiązuje go względem cwd i run z `notebooks/` wyląduje w drugim store.
+- MLflow (od 6.10.2026: SQLite): `configure_mlflow(settings)` z `evaluation/tracking.py` na starcie
+  każdego skryptu i notebooka — runy w `mlflow.db`, artefakty w `mlruns/`, oba jako bezwzględne
+  ścieżki z configu. MLflow 3.14 odrzuca magazyn plikowy, a bez jawnego URI zapisuje do `mlflow.db`
+  w cwd (run z `notebooks/` wylądowałby w drugim magazynie). UI z korzenia repo:
+  `uv run mlflow ui --backend-store-uri sqlite:///mlflow.db`.
 - GPU: RTX 5080 (Blackwell/sm_120) → PyTorch tylko z kół **cu128+** (jawny index w pyproject).
   Problemy GPU mają osobny timebox i nie blokują ścieżek CPU.
 - Dane poza gitem (`dane/` w .gitignore); w repo tylko kod, `fetch_data.py`, mapa etykiet,

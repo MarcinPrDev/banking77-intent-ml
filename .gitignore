@@ -21,6 +21,8 @@ dane/splits/*
 !dane/splits/*.json
 /models/
 mlruns/
+# baza SQLite MLflow (runy: parametry, metryki, tagi) — decyzja 6.10.2026; artefakty w mlruns/
+mlflow.db*
 *.joblib
 *.parquet
 # niedokończone pobrania fetch_data.py

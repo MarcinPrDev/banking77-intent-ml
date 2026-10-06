@@ -141,7 +141,8 @@ Nazwy klas są robocze — ostateczne nazewnictwo i podział na moduły to decyz
 
 ## Przepływ artefaktów modelu
 
-**MLflow** (lokalny `mlruns/`) = tracking wszystkich runów: parametry, metryki na walidacji,
+**MLflow** (lokalnie, poza gitem: baza `mlflow.db` z runami + artefakty w `mlruns/`; podgląd:
+`uv run mlflow ui --backend-store-uri sqlite:///mlflow.db`) = tracking wszystkich runów: parametry, metryki na walidacji,
 czas treningu, rozmiar artefaktu. Po zamrożeniu eksperymentów (W3) **jeden wybrany model**
 trafia do `models/<nazwa>/<wersja>/` z manifestem (sha256 plików, wersje bibliotek, metryki
 walidacyjne, data). Wersja wybranego artefaktu trafi do configu w W3 (sekcja `deploy`:
