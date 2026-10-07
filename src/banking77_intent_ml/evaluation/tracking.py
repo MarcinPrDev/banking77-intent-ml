@@ -5,6 +5,10 @@ agregaty (accuracy, macro-F1) jako metryki MLflow — do porównań między runa
 klasa i macierz pomyłek jako tabele-artefakty (`log_table`); przy każdym runie tagi protokołu:
 `split=val`, `sha256_val_ids` z manifestu, commit danych, N-train i N-val.
 
+Decyzje autora po review N1 (7.10.2026): tag `sklearn_version` przy każdym runie (konfiguracje
+„wartości domyślne sklearn” da się odtworzyć tylko z wersją biblioteki); `extra_metrics` na
+metryki diagnostyczne modelu, np. liczbę iteracji solvera (ślad braku zbieżności w runie).
+
 Magazyn (decyzja autora 6.10.2026): runy w bazie SQLite (`paths.mlflow_db`), artefakty w `mlruns/`
 — oba jako bezwzględne URI z settings. MLflow 3.14 odrzuca magazyn plikowy, a bez jawnego URI
 zapisuje do `mlflow.db` w bieżącym katalogu (np. w notebooks/), czyli do drugiego magazynu.
@@ -16,6 +20,7 @@ import json
 from typing import Any
 
 import mlflow
+import sklearn
 from mlflow.tracking import MlflowClient
 
 from banking77_intent_ml.config import Settings
@@ -41,7 +46,7 @@ def configure_mlflow(settings: Settings) -> None:
 
 
 def protocol_tags(settings: Settings) -> dict[str, str]:
-    """Tagi wiążące run z zamrożonym protokołem: manifest splitu i przypięte dane."""
+    """Tagi runu: zamrożony protokół (manifest splitu, przypięte dane) i wersja sklearn."""
     manifest = json.loads(settings.split.manifest_path.read_text(encoding="utf-8"))
     return {
         "split": "val",
@@ -49,6 +54,7 @@ def protocol_tags(settings: Settings) -> dict[str, str]:
         "data_commit": settings.dataset.commit,
         "n_train": str(manifest["n_train"]),
         "n_val": str(manifest["n_val"]),
+        "sklearn_version": sklearn.__version__,
     }
 
 
@@ -60,12 +66,18 @@ def log_validation_run(
     settings: Settings,
     tags: dict[str, str] | None = None,
     fit_seconds: float | None = None,
+    extra_metrics: dict[str, float] | None = None,
 ) -> str:
-    """Run MLflow: parametry, metryki z configu (+ czas fitu), tagi protokołu, tabele; zwraca id."""
+    """Run MLflow: parametry, metryki z configu (+ czas fitu i `extra_metrics`), tagi protokołu,
+    tabele; zwraca id. Kolizja nazw w `extra_metrics` = błąd, zanim powstanie jakikolwiek run."""
     configured = {settings.evaluation.primary_metric, settings.evaluation.selection_metric}
     missing = configured - set(result.metrics())
     if missing:
         raise ValueError(f"evaluate() nie liczy metryk wskazanych w configu: {sorted(missing)}")
+    extra = dict(extra_metrics or {})
+    clash = {*result.metrics(), "fit_seconds"} & set(extra)
+    if clash:
+        raise ValueError(f"extra_metrics nadpisałyby metryki runu: {sorted(clash)}")
 
     configure_mlflow(settings)
     run_tags = {**protocol_tags(settings), **(tags or {})}
@@ -74,6 +86,7 @@ def log_validation_run(
         metrics = result.metrics()
         if fit_seconds is not None:
             metrics["fit_seconds"] = fit_seconds
+        metrics.update(extra)
         mlflow.log_metrics(metrics)
         mlflow.log_table(result.per_class.reset_index(), artifact_file=PER_CLASS_ARTIFACT)
         mlflow.log_table(result.confusion.reset_index(), artifact_file=CONFUSION_ARTIFACT)

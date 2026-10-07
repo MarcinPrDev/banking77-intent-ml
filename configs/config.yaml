@@ -65,8 +65,9 @@ models:
   tfidf_lr:
     hpo_trials: 16                         # budżet 12–20 konfiguracji (wektoryzator + regularyzacja);
                                            # 16 to propozycja — do potwierdzenia przez autora (W2)
-    # Pierwsza konfiguracja (N1, decyzja autora 7.10.2026): wartości domyślne scikit-learn 1.9,
-    # wpisane jawnie — zmiana wartości domyślnych w nowej wersji biblioteki nie zmieni runu po cichu.
+    # Pierwsza konfiguracja (N1, decyzja autora 7.10.2026): wartości domyślne scikit-learn 1.9.
+    # Jawnie wpisane są parametry decyzji N1 — tych zmiana domyślnych w bibliotece nie ruszy;
+    # pozostałe (np. norm, smooth_idf, lowercase, tol) idą za wersją z tagu runu `sklearn_version`.
     # Klucze = nazwy parametrów konstruktorów sklearn, przekazywane 1:1; HPO w W2 startuje stąd.
     tfidf:                                 # -> TfidfVectorizer(**tfidf)
       ngram_range: [1, 1]                  # YAML nie ma krotek — settings zamienia listę na (1, 1)
