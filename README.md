@@ -89,7 +89,7 @@ Liczby z publikacji to konkretne konfiguracje, nie gwarantowany przedział wynik
 | Model | Budżet strojenia (walidacja, MLflow) | Cel | Wagi / licencja |
 |---|---|---|---|
 | Dummy | brak | kontrola rozkładu i metryk | — |
-| **TF-IDF + Logistic Regression** | `tfidf_lr.hpo_trials` = 16 konfiguracji wektoryzatora (słowa/znaki, n-gramy, min_df) i regularyzacji (C) | tani, interpretowalny baseline; kandydat do wdrożenia | — |
+| **TF-IDF + Logistic Regression** | `tfidf_lr.hpo_trials` = 16 konfiguracji wektoryzatora (słowa/znaki, n-gramy, min_df), regularyzacji (C) i wag klas (`class_weight`); punkt startu = pierwsza konfiguracja z configu (W1) | tani, interpretowalny baseline; kandydat do wdrożenia | — |
 | **all-MiniLM-L6-v2 (zamrożony) + kNN** | kilka `k` × ważenie (uniform/distance) | wartość reprezentacji semantycznej bez dostrajania | HF `sentence-transformers/all-MiniLM-L6-v2`, Apache-2.0, rewizja przypięta w configu |
 | **DistilBERT + głowica 77 klas** | 2–3 konfiguracje (np. LR × epoki), start wg Qi 2021 | efekt dostrajania reprezentacji; RTX 5080 | HF `distilbert/distilbert-base-uncased`, Apache-2.0, rewizja przypięta |
 | *(stretch A)* LLM zero-shot | brak strojenia; prompt dobrany na walidacji | koszt/latencja/błędy formatu vs modele dostrajane | Groq (plan płatny, Developer tier) przez LiteLLM; model w `llm.model` |

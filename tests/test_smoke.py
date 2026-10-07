@@ -5,7 +5,11 @@ w `configs/config.yaml`; zakresy, których nie wolno przekroczyć, pilnuje `test
 Wyjątek: stałe wynikające z definicji zadania (77 klas, nazwy plików danych).
 """
 
+import warnings
 from pathlib import Path
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
 
 import banking77_intent_ml
 from banking77_intent_ml.config import load_settings
@@ -49,11 +53,29 @@ def test_settings_load() -> None:
     assert isinstance(s.models.distilbert.lr, float)
     assert isinstance(s.models.distilbert.max_len, int) and s.models.distilbert.max_len > 0
     assert all(isinstance(k, int) for k in s.models.minilm_knn.k_values)
+    # TF-IDF + LR (decyzja 7.10): słowniki parametrów sklearn; YAML nie ma krotek
+    assert isinstance(s.models.tfidf_lr.tfidf["ngram_range"], tuple)
+    assert isinstance(s.models.tfidf_lr.logreg, dict)
 
     # LLM = stretch, domyślnie wyłączony; model to placeholder do decyzji Marcina (niepusty string)
     assert s.llm.enabled is False
     assert isinstance(s.llm.model, str) and s.llm.model
     assert s.llm.n_eval == s.llm.per_class * s.dataset.n_classes
+
+
+def test_tfidf_lr_config_is_valid_for_installed_sklearn() -> None:
+    """Parametry `models.tfidf_lr` przechodzą walidację sklearn (fit na zabawkowych tekstach).
+
+    Łapie literówkę w kluczu (TypeError), listę zamiast krotki (InvalidParameterError)
+    i parametr przestarzały w zainstalowanej wersji biblioteki (FutureWarning -> błąd).
+    """
+    cfg = load_settings().models.tfidf_lr
+    texts = ["top up failed", "top up pending", "top up declined",
+             "card not arrived", "card arrived late", "card still not arrived"]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", FutureWarning)
+        features = TfidfVectorizer(**cfg.tfidf).fit_transform(texts)
+        LogisticRegression(**cfg.logreg).fit(features, [0, 0, 0, 1, 1, 1])
 
 
 def test_settings_root_follows_config_location(tmp_path, monkeypatch) -> None:

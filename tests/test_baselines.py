@@ -31,3 +31,36 @@ def test_dummy_runs_are_logged_for_each_strategy(tmp_mlflow_settings):
     client = MlflowClient(tmp_mlflow_settings.mlflow.tracking_uri)
     for run in runs:
         assert client.get_run(run.run_id).data.tags["model_family"] == "dummy"
+
+
+# --- TF-IDF + LR (N1): szkielet — treść testów pisze autor, potem usuwa `skip` -----------------
+
+
+@pytest.fixture
+def toy_data() -> TrainVal:
+    """Sztuczne dane do testów TF-IDF + LR: 3 klasy o rozróżnialnym słownictwie."""
+    return TrainVal(
+        x_train=pd.Series([
+            "top up failed", "top up pending", "card not arrived", "card arrived late",
+            "exchange rate fee", "bad exchange rate",
+        ]),
+        y_train=pd.Series([0, 0, 1, 1, 2, 2]),
+        x_val=pd.Series(["top up declined", "card delivery", "exchange rate today"]),
+        y_val=pd.Series([0, 1, 2]),
+        label_map={"a": 0, "b": 1, "c": 2},
+    )
+
+
+@pytest.mark.skip(reason="N1: test pisze autor")
+def test_tfidf_vocabulary_comes_only_from_train(toy_data):
+    """Słowo obecne wyłącznie w x_val nie trafia do słownika TF-IDF (fit tylko na train)."""
+
+
+@pytest.mark.skip(reason="N1: test pisze autor")
+def test_tfidf_lr_steps_use_config_params():
+    """Parametry kroków Pipeline'u = wartości z `models.tfidf_lr` (konfiguracja z configu)."""
+
+
+@pytest.mark.skip(reason="N1: test pisze autor")
+def test_tfidf_lr_run_is_logged(toy_data, tmp_mlflow_settings):
+    """Run TF-IDF + LR ląduje w MLflow: tag `model_family`, parametry obu kroków, metryki."""

@@ -65,6 +65,22 @@ models:
   tfidf_lr:
     hpo_trials: 16                         # budżet 12–20 konfiguracji (wektoryzator + regularyzacja);
                                            # 16 to propozycja — do potwierdzenia przez autora (W2)
+    # Pierwsza konfiguracja (N1, decyzja autora 7.10.2026): wartości domyślne scikit-learn 1.9,
+    # wpisane jawnie — zmiana wartości domyślnych w nowej wersji biblioteki nie zmieni runu po cichu.
+    # Klucze = nazwy parametrów konstruktorów sklearn, przekazywane 1:1; HPO w W2 startuje stąd.
+    tfidf:                                 # -> TfidfVectorizer(**tfidf)
+      ngram_range: [1, 1]                  # YAML nie ma krotek — settings zamienia listę na (1, 1)
+      min_df: 1
+      sublinear_tf: false
+      token_pattern: '(?u)\b\w\w+\b'       # domyślny; pojedynczy cudzysłów = ukośniki dosłownie
+                                           # (znane ograniczenie: „can't” -> „can”, EDA sekcja 7)
+      stop_words: null                     # nie 'english': lista sklearn wycina top, up, not, why, can
+    logreg:                                # -> LogisticRegression(**logreg)
+      C: 1.0
+      l1_ratio: 0.0                        # kara L2 (parametr `penalty` przestarzały od sklearn 1.8)
+      class_weight: null                   # bez wag; 'balanced' = oś HPO w W2 (decyzja autora 7.10)
+      solver: lbfgs
+      max_iter: 100                        # ConvergenceWarning = run do powtórki, nie do wyciszenia
   minilm_knn:
     model_id: sentence-transformers/all-MiniLM-L6-v2   # Apache-2.0
     revision: PIN-ME                       # hash rewizji z HF Hub — przypiąć w W2 przed pierwszym runem

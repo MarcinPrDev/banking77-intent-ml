@@ -17,6 +17,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -86,6 +87,11 @@ class EvaluationConfig:
 @dataclass(frozen=True)
 class TfidfLrConfig:
     hpo_trials: int
+    # Parametry konstruktorów sklearn przekazywane 1:1: `TfidfVectorizer(**tfidf)`,
+    # `LogisticRegression(**logreg)` — pierwsza konfiguracja N1 i start HPO w W2. Słowniki są
+    # współdzielone przez cały proces: nie modyfikuj w miejscu, buduj kopię ({**logreg, "C": c}).
+    tfidf: dict[str, Any]
+    logreg: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -168,6 +174,18 @@ def _file(raw: dict) -> DatasetFileConfig:
     return DatasetFileConfig(path=raw["path"], sha256=raw["sha256"], n_rows=int(raw["n_rows"]))
 
 
+def _sklearn_params(raw: dict) -> dict[str, Any]:
+    """Parametry konstruktora sklearn z YAML-a; `ngram_range` jako krotka.
+
+    YAML nie ma krotek, a sklearn 1.9 odrzuca `ngram_range=[1, 1]` (InvalidParameterError
+    przy fit). Pozostałe listy zostają listami — np. własna lista `stop_words` musi być listą.
+    """
+    params = dict(raw)
+    if "ngram_range" in params:
+        params["ngram_range"] = tuple(params["ngram_range"])
+    return params
+
+
 def load_settings(config_path: str | Path | None = None) -> Settings:
     """Zwraca ustawienia projektu wczytane z YAML (wybór pliku: docstring modułu)."""
     path = _resolve_config_path(config_path)
@@ -224,7 +242,11 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         ),
         models=ModelsConfig(
             seed=int(md["seed"]),
-            tfidf_lr=TfidfLrConfig(hpo_trials=int(md["tfidf_lr"]["hpo_trials"])),
+            tfidf_lr=TfidfLrConfig(
+                hpo_trials=int(md["tfidf_lr"]["hpo_trials"]),
+                tfidf=_sklearn_params(md["tfidf_lr"]["tfidf"]),
+                logreg=_sklearn_params(md["tfidf_lr"]["logreg"]),
+            ),
             minilm_knn=MinilmKnnConfig(
                 model_id=md["minilm_knn"]["model_id"],
                 revision=str(md["minilm_knn"]["revision"]),
