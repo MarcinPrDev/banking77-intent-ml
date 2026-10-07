@@ -15,6 +15,8 @@ import time
 from dataclasses import dataclass
 
 from sklearn.dummy import DummyClassifier
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
 from banking77_intent_ml.config import Settings
@@ -66,22 +68,47 @@ def run_dummy_baselines(data: TrainVal, settings: Settings) -> list[BaselineRun]
 def build_tfidf_lr(config: TfidfLrConfig, *, seed: int) -> Pipeline:
     """Pipeline TF-IDF -> LogisticRegression z parametrami z configu (`models.tfidf_lr`).
 
-    TODO(Marcin, N1). Kontrakt:
+    Kontrakt:
     - parametry kroków wyłącznie z `config.tfidf` i `config.logreg` — konfiguracja żyje
       w configu, nie w kodzie (słowników nie modyfikuj w miejscu);
-    - `seed` = `models.seed` z configu (lbfgs go nie używa — gdzie i czy przekazać: Twoja decyzja);
+    - `seed` trafia do `random_state` regresji (lbfgs go nie używa);
     - zwraca nieuczony `Pipeline` — fit robi wywołujący, tylko na części treningowej.
     """
-    raise NotImplementedError("N1: build_tfidf_lr — pisze autor")
+    logreg_params = {**config.logreg, "random_state": seed}
+    return Pipeline([
+        ("tfidf", TfidfVectorizer(**config.tfidf)),
+        ("logreg", LogisticRegression(**logreg_params)),
+    ])
 
 
 def run_tfidf_lr(data: TrainVal, settings: Settings) -> BaselineRun:
     """TF-IDF + LR na zamrożonej walidacji: fit na train, evaluate() na val, run MLflow.
 
-    TODO(Marcin, N1). Kontrakt (jak `run_dummy_baselines`):
+    Kontrakt (jak `run_dummy_baselines`):
     - fit wyłącznie na `data.x_train` / `data.y_train` — słownik i IDF tylko z train;
     - ocena przez `evaluate()` na `data.x_val` / `data.y_val`;
     - run przez `log_validation_run`: parametry obu kroków + seed, czas fitu, tag `model_family`;
     - zwraca `BaselineRun`.
     """
-    raise NotImplementedError("N1: run_tfidf_lr — pisze autor")
+    config = settings.models.tfidf_lr
+    model = build_tfidf_lr(config, seed=settings.models.seed)
+    start = time.perf_counter()
+    model.fit(data.x_train, data.y_train)
+    fit_seconds = time.perf_counter() - start
+    result = evaluate(data.y_val, model.predict(data.x_val), data.label_map)
+    name = "tfidf-lr"
+    run_id = log_validation_run(
+        run_name=name,
+        params={
+            "model": "tfidf_lr",
+            "seed": settings.models.seed,
+            **{f"tfidf__{key}": value for key, value in config.tfidf.items()},
+            **{f"logreg__{key}": value for key, value in config.logreg.items()},
+        },
+        result=result,
+        settings=settings,
+        tags={"model_family": "tfidf_lr"},
+        fit_seconds=fit_seconds,
+        extra_metrics={"n_iter": int(model.named_steps["logreg"].n_iter_[0])},
+    )
+    return BaselineRun(name=name, run_id=run_id, result=result, fit_seconds=fit_seconds)
