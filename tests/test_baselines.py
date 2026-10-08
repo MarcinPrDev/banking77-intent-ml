@@ -114,6 +114,7 @@ def test_tfidf_lr_run_is_logged(toy_data, tmp_mlflow_settings, monkeypatch):
     run = run_tfidf_lr(toy_data, settings)
 
     assert run.name == "tfidf-lr"
+    assert run.model is model
     assert run.result.n_samples == len(toy_data.y_val)
     assert run.result.accuracy == pytest.approx(1.0)
     assert run.result.macro_f1 == pytest.approx(1.0)

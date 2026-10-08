@@ -90,10 +90,7 @@ def run_tfidf_lr(data: TrainVal, settings: Settings) -> BaselineRun:
     - fit wyłącznie na `data.x_train` / `data.y_train` — słownik i IDF tylko z train;
     - ocena przez `evaluate()` na `data.x_val` / `data.y_val`;
     - run przez `log_validation_run`: parametry obu kroków + seed, czas fitu, tag `model_family`;
-    - zwraca `BaselineRun`.
-
-    TODO(Marcin, N2): zwracany `BaselineRun` ma nieść wytrenowany pipeline w polu `model`
-    — bez tego `--save` w CLI nie ma czego zapisać.
+    - zwraca `BaselineRun` z wytrenowanym pipeline'em w polu `model`.
     """
     config = settings.models.tfidf_lr
     model = build_tfidf_lr(config, seed=settings.models.seed)
@@ -116,4 +113,6 @@ def run_tfidf_lr(data: TrainVal, settings: Settings) -> BaselineRun:
         fit_seconds=fit_seconds,
         extra_metrics={"n_iter": int(model.named_steps["logreg"].n_iter_[0])},
     )
-    return BaselineRun(name=name, run_id=run_id, result=result, fit_seconds=fit_seconds)
+    return BaselineRun(
+        name=name, run_id=run_id, result=result, fit_seconds=fit_seconds, model=model
+    )
