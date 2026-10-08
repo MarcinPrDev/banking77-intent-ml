@@ -4,6 +4,9 @@ Uruchomienie — model wybierany jawnie (decyzja autora 7.10.2026: bez flagi skr
 ponowne uruchomienie nie dopisze przypadkiem duplikatów runów):
   uv run python scripts/train_baselines.py --model dummy      # Dummy x2 (most_frequent, stratified)
   uv run python scripts/train_baselines.py --model tfidf_lr   # TF-IDF + LR z configu
+  uv run python scripts/train_baselines.py --model tfidf_lr --save   # + artefakt w models/
+`--save` (decyzja autora 9.10.2026): po runie zapisuje model do `paths.models_dir` razem
+z metadanymi wskazującymi ten run — oficjalny zapis dopiero po commicie kodu (tag gita w runie).
 Podgląd runów (z korzenia repo): uv run mlflow ui --backend-store-uri sqlite:///mlflow.db
 Logika: src/banking77_intent_ml/models/baselines.py.
 Decyzje — autor (6.10.2026, 7.10.2026).
@@ -20,8 +23,10 @@ from banking77_intent_ml.data.labels import LabelMapError
 from banking77_intent_ml.data.loader import DataValidationError
 from banking77_intent_ml.data.splits import SplitError
 from banking77_intent_ml.models.baselines import run_dummy_baselines, run_tfidf_lr
+from banking77_intent_ml.models.persistence import MODEL_SUFFIX, build_metadata, save_model
 
 MODELS = ("dummy", "tfidf_lr")
+SAVABLE = ("tfidf_lr",)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -29,7 +34,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Modele bazowe: fit na train, ocena na zamrożonej walidacji, run w MLflow."
     )
     parser.add_argument("--model", required=True, choices=MODELS, help="model do treningu")
-    return parser.parse_args(argv)
+    parser.add_argument(
+        "--save", action="store_true", help="zapisz wytrenowany model do paths.models_dir"
+    )
+    args = parser.parse_args(argv)
+    if args.save and args.model not in SAVABLE:
+        parser.error(f"--save działa tylko z --model {' / '.join(SAVABLE)}")
+    return args
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -52,6 +63,15 @@ def main(argv: list[str] | None = None) -> None:
         result = run.result
         print(f"{run.name:22s} accuracy {result.accuracy:.4f} | macro-F1 {result.macro_f1:.4f} "
               f"| run {run.run_id[:8]}")
+
+    if args.save:
+        (run,) = runs
+        if run.model is None:
+            print("[FAIL] ZAPIS: run nie zwrócił wytrenowanego modelu (BaselineRun.model)")
+            sys.exit(1)
+        path = settings.paths.models_dir / f"{args.model}{MODEL_SUFFIX}"
+        metadata = build_metadata(model_name=args.model, run_id=run.run_id, settings=settings)
+        print(f"model zapisany: {save_model(run.model, path, metadata=metadata)}")
 
 
 if __name__ == "__main__":

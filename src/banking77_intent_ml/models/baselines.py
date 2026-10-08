@@ -14,6 +14,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
+from sklearn.base import BaseEstimator
 from sklearn.dummy import DummyClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
@@ -34,6 +35,7 @@ class BaselineRun:
     run_id: str
     result: EvaluationResult
     fit_seconds: float
+    model: BaseEstimator | None = None  # wytrenowany model — potrzebny do zapisu (`--save`, N2)
 
 
 def build_dummy(strategy: str, *, seed: int) -> DummyClassifier:
@@ -89,6 +91,9 @@ def run_tfidf_lr(data: TrainVal, settings: Settings) -> BaselineRun:
     - ocena przez `evaluate()` na `data.x_val` / `data.y_val`;
     - run przez `log_validation_run`: parametry obu kroków + seed, czas fitu, tag `model_family`;
     - zwraca `BaselineRun`.
+
+    TODO(Marcin, N2): zwracany `BaselineRun` ma nieść wytrenowany pipeline w polu `model`
+    — bez tego `--save` w CLI nie ma czego zapisać.
     """
     config = settings.models.tfidf_lr
     model = build_tfidf_lr(config, seed=settings.models.seed)

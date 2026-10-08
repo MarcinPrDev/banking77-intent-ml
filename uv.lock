@@ -298,6 +298,7 @@ name = "banking77-intent-ml"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "joblib" },
     { name = "matplotlib" },
     { name = "mlflow" },
     { name = "optuna" },
@@ -340,6 +341,7 @@ requires-dist = [
     { name = "groq", marker = "extra == 'llm'", specifier = ">=0.9" },
     { name = "httpx", marker = "extra == 'serving'", specifier = ">=0.28.1" },
     { name = "ipykernel", marker = "extra == 'dev'", specifier = ">=6.29" },
+    { name = "joblib", specifier = ">=1.5.3" },
     { name = "jupyterlab", marker = "extra == 'dev'", specifier = ">=4.2" },
     { name = "litellm", marker = "extra == 'llm'", specifier = ">=1.91.0" },
     { name = "matplotlib", specifier = ">=3.9" },
