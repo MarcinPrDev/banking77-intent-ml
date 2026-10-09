@@ -305,7 +305,9 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     hash mapy etykiet, id runu); identyczne predykcje w nowym procesie, udowodnione testem
   - [x] krótka EDA z wnioskami (`notebooks/01_eda.ipynb`, sekcje 1–8, 6.10); długości w tokenach
     → sob 10.10, redakcja wniosków → wt 13.10
-  - [ ] test uruchomienia DistilBERT na GPU + przypięcie rewizji wag (`PIN-ME`) → sob 10.10
+  - [x] rewizje wag przypięte w configu (9.10; MiniLM i DistilBERT, licencje apache-2.0) + test
+    uruchomienia DistilBERT na GPU (`scripts/smoke_gpu.py`, 9.10): działa — mini-epoka 10 kroków
+    × batch 32 na zdaniach z train, bf16, szczyt VRAM 1,40 GB z 17,1 GB; bez metryk
   - Bramka po W1: 4.10 nie przeszła (brak baseline'u w MLflow i testu zapisu/odczytu), warunkowo
     kontynuowano; **powtórka pt 9.10: zielona — kontynuujemy, W2 od 10.10** (szczegóły:
     *Bramka po W1 i fallback*)
