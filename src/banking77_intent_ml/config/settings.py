@@ -85,6 +85,13 @@ class EvaluationConfig:
 
 
 @dataclass(frozen=True)
+class TfidfLrHpoConfig:
+    sampler: str  # "tpe" (decyzja autora 9.10)
+    tie_tolerance: float  # remis w celu HPO poniżej tej różnicy -> mniej cech
+    space: dict[str, Any]  # przestrzeń z configu; kształt czyta `models.hpo.suggest_tfidf_lr`
+
+
+@dataclass(frozen=True)
 class TfidfLrConfig:
     hpo_trials: int
     # Parametry konstruktorów sklearn przekazywane 1:1: `TfidfVectorizer(**tfidf)`,
@@ -92,6 +99,10 @@ class TfidfLrConfig:
     # współdzielone przez cały proces: nie modyfikuj w miejscu, buduj kopię ({**logreg, "C": c}).
     tfidf: dict[str, Any]
     logreg: dict[str, Any]
+    # W YAML-u oba klucze są wymagane (KeyError przy braku); domyślne wartości tylko dla
+    # konfiguracji budowanych w kodzie (np. próby HPO, testy).
+    hpo: TfidfLrHpoConfig | None = None
+    frozen: dict[str, dict[str, Any]] | None = None  # zwycięzca HPO {tfidf, logreg} albo None
 
 
 @dataclass(frozen=True)
@@ -186,6 +197,24 @@ def _sklearn_params(raw: dict) -> dict[str, Any]:
     return params
 
 
+def _tfidf_lr(raw: dict) -> TfidfLrConfig:
+    hpo, frozen = raw["hpo"], raw["frozen"]
+    return TfidfLrConfig(
+        hpo_trials=int(raw["hpo_trials"]),
+        tfidf=_sklearn_params(raw["tfidf"]),
+        logreg=_sklearn_params(raw["logreg"]),
+        hpo=TfidfLrHpoConfig(
+            sampler=str(hpo["sampler"]),
+            tie_tolerance=float(hpo["tie_tolerance"]),
+            space=dict(hpo["space"] or {}),
+        ),
+        frozen=None if frozen is None else {
+            "tfidf": _sklearn_params(frozen["tfidf"]),
+            "logreg": _sklearn_params(frozen["logreg"]),
+        },
+    )
+
+
 def load_settings(config_path: str | Path | None = None) -> Settings:
     """Zwraca ustawienia projektu wczytane z YAML (wybór pliku: docstring modułu)."""
     path = _resolve_config_path(config_path)
@@ -242,11 +271,7 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         ),
         models=ModelsConfig(
             seed=int(md["seed"]),
-            tfidf_lr=TfidfLrConfig(
-                hpo_trials=int(md["tfidf_lr"]["hpo_trials"]),
-                tfidf=_sklearn_params(md["tfidf_lr"]["tfidf"]),
-                logreg=_sklearn_params(md["tfidf_lr"]["logreg"]),
-            ),
+            tfidf_lr=_tfidf_lr(md["tfidf_lr"]),
             minilm_knn=MinilmKnnConfig(
                 model_id=md["minilm_knn"]["model_id"],
                 revision=str(md["minilm_knn"]["revision"]),

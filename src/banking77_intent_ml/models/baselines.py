@@ -83,7 +83,14 @@ def build_tfidf_lr(config: TfidfLrConfig, *, seed: int) -> Pipeline:
     ])
 
 
-def run_tfidf_lr(data: TrainVal, settings: Settings) -> BaselineRun:
+def run_tfidf_lr(
+    data: TrainVal,
+    settings: Settings,
+    *,
+    config: TfidfLrConfig | None = None,
+    run_name: str = "tfidf-lr",
+    tags: dict[str, str] | None = None,
+) -> BaselineRun:
     """TF-IDF + LR na zamrożonej walidacji: fit na train, evaluate() na val, run MLflow.
 
     Kontrakt (jak `run_dummy_baselines`):
@@ -91,14 +98,17 @@ def run_tfidf_lr(data: TrainVal, settings: Settings) -> BaselineRun:
     - ocena przez `evaluate()` na `data.x_val` / `data.y_val`;
     - run przez `log_validation_run`: parametry obu kroków + seed, czas fitu, tag `model_family`;
     - zwraca `BaselineRun` z wytrenowanym pipeline'em w polu `model`.
+
+    `config`, `run_name`, `tags` (W2, HPO): próba z innymi parametrami niż w configu; bez nich
+    — pierwsza konfiguracja z `models.tfidf_lr` (N1), jak dotąd.
     """
-    config = settings.models.tfidf_lr
+    config = config or settings.models.tfidf_lr
     model = build_tfidf_lr(config, seed=settings.models.seed)
     start = time.perf_counter()
     model.fit(data.x_train, data.y_train)
     fit_seconds = time.perf_counter() - start
     result = evaluate(data.y_val, model.predict(data.x_val), data.label_map)
-    name = "tfidf-lr"
+    name = run_name
     run_id = log_validation_run(
         run_name=name,
         params={
@@ -109,7 +119,7 @@ def run_tfidf_lr(data: TrainVal, settings: Settings) -> BaselineRun:
         },
         result=result,
         settings=settings,
-        tags={"model_family": "tfidf_lr"},
+        tags={"model_family": "tfidf_lr", **(tags or {})},
         fit_seconds=fit_seconds,
         extra_metrics={"n_iter": int(model.named_steps["logreg"].n_iter_[0])},
     )

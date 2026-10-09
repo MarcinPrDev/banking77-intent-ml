@@ -82,6 +82,14 @@ models:
       class_weight: null                   # bez wag; 'balanced' = oś HPO w W2 (decyzja autora 7.10)
       solver: lbfgs
       max_iter: 100                        # ConvergenceWarning = run do powtórki, nie do wyciszenia
+    # HPO W2 (decyzje autora 9.10.2026): Optuna TPE z seedem models.seed, budżet = hpo_trials,
+    # cel = evaluation.selection_metric na walidacji; remis (różnica < tie_tolerance, ≈ 1–2
+    # predykcje z 1 499) -> mniej cech TF-IDF. Ponowne uruchomienie HPO blokuje skrypt (budżet).
+    hpo:
+      sampler: tpe
+      tie_tolerance: 0.001
+      space: {}                            # TODO(Marcin): przestrzeń wariantu B (kontrakt: models/hpo.py)
+    frozen: null                           # zwycięzca HPO {tfidf: ..., logreg: ...} — wpisuje autor
   minilm_knn:
     model_id: sentence-transformers/all-MiniLM-L6-v2   # Apache-2.0
     # Rewizja = commit `main` na HF Hub w dniu przypięcia (9.10.2026; licencja apache-2.0 wg karty).

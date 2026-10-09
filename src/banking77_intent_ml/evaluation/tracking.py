@@ -45,6 +45,16 @@ def configure_mlflow(settings: Settings) -> None:
     mlflow.set_experiment(settings.mlflow.experiment)
 
 
+def count_runs_with_tag(settings: Settings, key: str, value: str) -> int:
+    """Liczba runów eksperymentu z configu z tagiem `key = value` (np. próby badania HPO)."""
+    client = MlflowClient(settings.mlflow.tracking_uri)
+    experiment = client.get_experiment_by_name(settings.mlflow.experiment)
+    if experiment is None:
+        return 0
+    runs = client.search_runs([experiment.experiment_id], filter_string=f"tags.{key} = '{value}'")
+    return len(runs)
+
+
 def protocol_tags(settings: Settings) -> dict[str, str]:
     """Tagi runu: zamrożony protokół (manifest splitu, przypięte dane) i wersja sklearn."""
     manifest = json.loads(settings.split.manifest_path.read_text(encoding="utf-8"))

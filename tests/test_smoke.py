@@ -56,6 +56,10 @@ def test_settings_load() -> None:
     # TF-IDF + LR (decyzja 7.10): słowniki parametrów sklearn; YAML nie ma krotek
     assert isinstance(s.models.tfidf_lr.tfidf["ngram_range"], tuple)
     assert isinstance(s.models.tfidf_lr.logreg, dict)
+    # HPO W2 (decyzja 9.10): Optuna TPE, tolerancja remisu jako liczba; frozen = None albo słowniki
+    assert s.models.tfidf_lr.hpo.sampler == "tpe"
+    assert isinstance(s.models.tfidf_lr.hpo.tie_tolerance, float)
+    assert s.models.tfidf_lr.frozen is None or set(s.models.tfidf_lr.frozen) == {"tfidf", "logreg"}
 
     # LLM = stretch, domyślnie wyłączony; model to placeholder do decyzji Marcina (niepusty string)
     assert s.llm.enabled is False
