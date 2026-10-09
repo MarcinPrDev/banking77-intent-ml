@@ -1,7 +1,8 @@
 # ADR-0001: Zmiana tematu projektu z US Accidents (Severity) na BANKING77 (klasyfikacja intencji)
 
-- **Status:** zaproponowany
-- **Data:** 2026-09-30
+- **Status:** zaakceptowany
+- **Data decyzji:** 2026-09-30
+- **Data akceptacji:** 2026-10-09
 - **Etap:** W1
 
 > Sekcje „Kontekst i problem" oraz „Rozważane opcje" zestawił asystent z notatek researchu
@@ -12,7 +13,7 @@
 > zarchiwizowane w `P:\Repos\us-accidents-audit\`. Własne pomiary autora z 28.09: rozkład klas
 > i wolumen rok × źródło (skrypt `scripts/sanity_w1.py` — w historii gita do commita `5c94e05`,
 > kopia robocza w `P:\Repos\us-accidents-audit\repo-leftovers\`).
-> Sekcje „Decyzja" i „Konsekwencje" pisze **Marcin własnymi słowami** (test obrony pyta o ten ADR).
+> Sekcje „Decyzja" i „Konsekwencje" uzupełniono 9.10.2026 o ustalenia i wyniki z W1.
 
 ## Kontekst i problem
 
@@ -114,43 +115,68 @@ SECOM, SciFact, FinQA (drugi research: 3,8–4,25) — odrzucone wcześniej, szc
 
 ## Decyzja
 
-<!-- TODO-Marcin: napisz własnymi słowami (3–6 zdań). Fakty do użycia: kryterium = bezpieczeństwo
-terminu 31.10; wariant A (rdzeń TF-IDF+LR / MiniLM+kNN / DistilBERT, LLM jako pierwszy stretch);
-Groq plan płatny; kind obowiązkowo z auto-deployem i testem HTTP w GitHub Actions, GKE stretch;
-Spark i CV poza zakresem; NHTSA i audyt US Accidents po projekcie. -->
-
-Wybrano: **TODO-Marcin: napisz własnymi słowami**, ponieważ TODO-Marcin: napisz własnymi słowami.
-
-Pytania pomocnicze (odpowiedz sobie, zanim napiszesz — test obrony zapyta o to samo):
-1. Dlaczego „bezpieczeństwo terminu" przeważyło nad domeną (NHTSA) i nad najwyższą wiarygodnością (TEP)?
-   Co konkretnie w BANKING77 zmniejsza ryzyko: gotowy split, rozmiar danych, benchmark z opisanym
-   protokołem, brak ETL — i którego z tych elementów NHTSA nie miał?
-2. Dlaczego nie pivot K2 + K1-min, skoro koszt zmiany był zerowy, a audyt leakage już zrobiony?
-   Co tracisz, rezygnując z „MSA dla etykiet" jako rdzenia, i jak to odzyskujesz w sekcji „Po projekcie"?
-3. Dlaczego rdzeń **bez** LLM (wariant A), skoro Z9 i LLMOps są na topie i masz działający klucz Groq?
-   Co ekspozycja BANKING77 na benchmark robi z interpretacją wyniku LLM i jak to napiszesz w README?
+Wybieram **BANKING77 jako jedyny zbiór podstawowy**, bo przy terminie 31.10.2026 najważniejsze
+jest dla mnie domknięcie wiarygodnego porównania modeli i wdrożenia.
+Gotowy podział train/test, mały rozmiar danych i benchmark z opisanym protokołem ograniczają
+prace przygotowawcze; NHTSA wymaga dodatkowego ETL, a szacunek **54–71 h dla TEP przy budżecie
+50–65 h** oznacza ryzyko niedotrzymania terminu mimo najwyższej oceny wiarygodności danych.
+Rdzeń stanowią **TF-IDF+LR, zamrożone embeddingi MiniLM+kNN i dostrajany DistilBERT**;
+LLM zero-shot przez Groq w planie płatnym i LiteLLM zostaje rozszerzeniem, którego wynik
+trzeba interpretować z uwzględnieniem nieustalonej ekspozycji modelu na BANKING77.
+Wdrożenie obejmuje FastAPI, obraz Docker oraz obowiązkowy **kind z automatycznym deployem
+i testem HTTP w GitHub Actions**, a GKE pozostaje rozszerzeniem.
+Spark i computer vision (CV) są poza zakresem, żeby nie dokładać infrastruktury ani kolejnej
+dziedziny do małego zadania NLP.
+Do NHTSA i audytu US Accidents wrócę po projekcie — pivot na audyt zachowałby dotychczasową
+pracę, ale nadal wymagałby czasu na wyjaśnienie etykiety i obronę sensu modelu za API.
 
 ## Konsekwencje
 
-<!-- TODO-Marcin: napisz własnymi słowami. Szkielet poniżej wskazuje, co powinno się tu znaleźć;
-nie przepisuj punktów z notatek — nazwij to, co Ty zyskujesz i za co Ty płacisz. -->
+### Dobre
 
-- Dobre: TODO-Marcin: napisz własnymi słowami
-  <!-- słowa-klucze do przemyślenia (nie do przepisania): punkt odniesienia · rozmiar danych
-  a czas na protokół i wdrożenie · jedno pochodzenie liczb · co przenosisz ze szkieletu ·
-  pokrycie rubryki -->
-- Złe / ryzyka: TODO-Marcin: napisz własnymi słowami
-  <!-- słowa-klucze do przemyślenia (nie do przepisania): domena vs profil zawodowy · popularność
-  zbioru · węższa EDA · jakość etykiet i nakładki train/test · PII · ekspozycja LLM ·
-  test zrównoważony vs realny ruch · co przepada z pracy nad US Accidents -->
-- Kiedy wrócić do tej decyzji: TODO-Marcin: napisz własnymi słowami
-  <!-- słowa-klucze do przemyślenia: PII · bramka po W1 · warunek udokumentowanej anonimizacji -->
+- Mam punkt odniesienia z opisanym protokołem i dane mieszczące się w pamięci jednej maszyny.
+  Mogę poświęcić więcej czasu na uczciwe porównanie jakości i kosztu modeli oraz odtworzenie
+  wyników; porównanie z literaturą będzie dotyczyło dopiero zgodnego protokołu testowego.
+- Zachowuję szkielet repozytorium, konfigurację środowiska i mechanizmy kontroli protokołu.
+  Parametry i ścieżki mają jedno źródło w configu, a wyniki pochodzą z runów MLflow.
+- Trzy podejścia do klasyfikacji tekstu oraz API, Docker, kind i CI pozwalają pokazać pełną
+  ścieżkę od danych do działającej usługi i pokryć wymagania projektu bez uzależnienia rdzenia
+  od LLM ani chmury.
 
-Pytania pomocnicze do Konsekwencji:
-1. Co z audytu US Accidents (drabina leakage, kappa, dryf) **zostaje** w tym projekcie — jako ADR,
-   jako sekcja „dlaczego zmiana tematu" w README, jako materiał portfolio po oddaniu — a co przepada?
-2. Które ograniczenia BANKING77 wpisujesz do README **przed** treningiem (żeby nie wyglądały na
-   wymówki po wynikach): nakładki train/test, potencjalne błędy etykiet, brak OOD, ekspozycja LLM, PII?
-3. Jaki jest Twój warunek powrotu do tej decyzji i kto go sprawdza w niedzielę 4.10 wieczorem —
-   co dokładnie musi działać (dane, split, baseline > Dummy, zapis/odczyt), a co świadomie **nie** jest
-   warunkiem (92 %, GPU)?
+### Złe i ryzyka
+
+- Rezygnuję na ten termin z domeny automotive i bardziej wyróżniającego się audytu etykiet,
+  a EDA ma węższy zakres. Pracy nad US Accidents nie odzyskam jako części serwowanego modelu;
+  drabina leakage, kappa i dryf zostają w uzasadnieniu tego ADR i w README, a pełny audyt
+  oraz NHTSA są materiałem do rozwinięcia po oddaniu projektu.
+- Jakość etykiet i pokrycie train/test ograniczają interpretację wyników. W literaturze około
+  14% danych treningowych wskazano automatycznie jako potencjalnie problematyczne; nie są to
+  potwierdzone błędy do hurtowej korekty. Dla 25 tekstów testu z odpowiednikiem w train ustaliliśmy 5.10,
+  przed treningiem, podzbiór 3 055 tekstów bez pokrycia; wynik na nim będzie kontrolą
+  wrażliwości obok pełnego testu 3 080, bez zmiany jego etykiet.
+- Test jest sztucznie zrównoważony i nie zawiera osobnego zbioru zgłoszeń spoza 77 intencji
+  (OOD). Wynik nie opisuje więc częstości błędów w rzeczywistym ruchu ani zdolności
+  odrzucania nieznanych intencji.
+- W EDA, w sekcji 8, uzyskałem **zero trafień wzorców PII, przy ograniczonym zakresie
+  kontroli**. To nie potwierdza braku danych osobowych ani udokumentowanej anonimizacji;
+  pochodzenie i sposób anonimizacji danych pozostają ograniczeniem zbioru.
+- BANKING77 jest popularnym benchmarkiem, a ekspozycja LLM na jego dane jest nieustalona.
+  Nawet wysoki wynik tego rozszerzenia nie będzie sam w sobie dowodem generalizacji;
+  ograniczenie opisuję w README niezależnie od uzyskanych metryk.
+
+### Kiedy wrócić do tej decyzji
+
+- **Wykrycie istotnych PII.** Wstrzymuję pracę na zbiorze i podejmuję decyzję o rezygnacji
+  z niego, jeśli nie da się zapewnić udokumentowanej anonimizacji. Obecny skan wzorców
+  nie zastępuje takiego dowodu i nie jest podstawą do zignorowania późniejszego znaleziska.
+- **Niespełnienie warunków bramki po W1 lub utrata odtwarzalności.** Bramkę przesunięto
+  z 4.10 na **9.10.2026**; na dzień akceptacji sprawdzone są sumy SHA-256 danych
+  (10 003 train / 3 080 test), zamrożony podział 8 504 / 1 499 z manifestem, baseline
+  TF-IDF+LR z accuracy 84,39% wobec 1,87% Dummy `most_frequent` na tej samej walidacji
+  oraz zapis i odczyt modelu z identycznymi predykcjami w nowym procesie.
+  Warunki techniczne bramki są spełnione; decyzja o jej przejściu pozostaje otwarta do
+  potwierdzenia, gdzie pójdzie czas wdrożenia, zgodnie z bramką opisaną w README.
+  Wrócę do decyzji, jeśli nie uda się odtworzyć tych elementów bez naruszenia protokołu
+  lub zmieścić wdrożenia przed terminem 31.10.
+  Wynik 92% i działający DistilBERT na GPU nie są warunkami tej bramki — test DistilBERT
+  na GPU pozostaje zaplanowany na sobotę 10.10.
