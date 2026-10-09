@@ -228,12 +228,18 @@ Rezerwa 8 h **nie jest** z góry budżetem na stretch.
 
 ## Bramka po W1 i fallback
 
-**Bramka (niedziela 4.10 wieczór) — kontynuujemy, jeśli:** dane i grupowany podział są
+**Bramka (powtórka: piątek 9.10, pierwotnie niedziela 4.10) — kontynuujemy, jeśli:** dane i grupowany podział są
 odtwarzalne (fetch → make_splits → identyczny manifest), baseline uczy się sensownie ponad Dummy
-(1,30%), predykcje przeżywają zapis/odczyt, i wiadomo, gdzie pójdzie czas wdrożenia.
+na tej samej walidacji, predykcje przeżywają zapis/odczyt, i wiadomo, gdzie pójdzie czas wdrożenia.
 **Nie uzależniamy decyzji od 92%.** Jeśli po 3–4 h diagnostyki baseline nie działa → naprawić
 loader / mapę etykiet / pipeline **przed** kolejnymi modelami. Problemy GPU mają osobny timebox
 i nie blokują ścieżek CPU.
+
+**Stan na 9.10:** warunki techniczne są spełnione — dane i zamrożony podział są odtwarzalne,
+TF-IDF+LR osiąga 84,39% accuracy wobec 1,87% Dummy `most_frequent` na walidacji, a zapis i odczyt
+modelu zachowują identyczne predykcje. **Decyzja autora (pt 9.10): kontynuujemy — W2 od 10.10.**
+Czas wdrożenia: autor ocenia plan W2–W4 jako wykonalny przy większym dziennym wymiarze pracy;
+godziny ponad plan slotów trafiają do księgi rezerwy (*Status*).
 
 **Fallback:** przy problemach z transformerem trzecią metodą zostaje **TF-IDF + LinearSVC**
 (mniej powtórki DL, rdzeń rubryki zachowany). Przy budżecie bliższym 50 h — od początku tnij HPO
@@ -279,12 +285,12 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
       (`scripts/smoke_llm.py`) — infrastruktura sprawdzona przed pivotem
 - [x] **30.09:** decyzja o zmianie tematu na BANKING77 · **2.10:** nowy plan-of-record, config,
       strażnik protokołu (`tests/test_contract.py`) i `scripts/fetch_data.py` w repo
-- [ ] **ADR-0001 — szkic** (kontekst i opcje zestawione z notatek researchu; sekcje *Decyzja*
-      i *Konsekwencje* do dopisania przez autora, status → zaakceptowany) — termin: przed bramką
-      po W1 (przesuniętą na pt 9.10)
+- [x] **ADR-0001 — zmiana tematu na BANKING77**: zaakceptowany 9.10 (kontekst i opcje zestawione
+      z notatek researchu; sekcje *Decyzja* i *Konsekwencje* — autor)
 - [ ] **ADR-0002 — protokół ewaluacji** (grupowany split, grupa konfliktowa, mapa etykiet,
-      podzbiory testowe; decyzje autora z 4.10) — autor, wieczory 5–9.10
-- [ ] **W1** (pt 2.10 wieczór + weekend 3–4.10; domknięcie w wieczory 5–9.10):
+      podzbiory testowe; decyzje autora z 4.10) — autor; nie zmieścił się w wieczorach 5–9.10,
+      przeniesiony na weekend 10–11.10
+- [x] **W1** (pt 2.10 wieczór + weekend 3–4.10; twarde minimum domknięte w wieczory 5–9.10):
   - [x] dane pobrane i zweryfikowane (`scripts/fetch_data.py`: SHA-256, 10 003 / 3 080 wierszy)
   - [x] loader z walidacją struktury (`data/loader.py`) + testy na sztucznych CSV
   - [x] mapa etykiet `configs/label_map.json` (77 kategorii, id wg `sorted()` nazw)
@@ -292,12 +298,17 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     duplikatów (31 nadmiarowych), grupa konfliktowa w train; indeksy w `dane/splits/` (w gicie)
     + `configs/split_manifest.json`; ponowne uruchomienie tylko weryfikuje („zgodny”)
   - [x] strażnik protokołu zielony na realnych plikach (zakres rozszerzony 4.10)
-  - [ ] podzbiory testowe 3 055 / 385 + audyt nazw kategorii testu (S2)
-  - [ ] `evaluate()` + Dummy ×2 i TF-IDF+LR w MLflow; test zapisu/odczytu modelu
-  - [ ] test uruchomienia DistilBERT na GPU; krótka EDA z wnioskami (`notebooks/01_eda.ipynb`)
-  - **Bramka po W1 nie przeszła 4.10** (brak baseline'u w MLflow i testu zapisu/odczytu; dane
-    i split odtwarzalne) — decyzja autora: warunkowo kontynuujemy, bramka powtórzona najpóźniej
-    w pt 9.10, W2 od 10.10 tylko po zielonej bramce
+  - [x] podzbiory testowe 3 055 / 385 + audyt nazw kategorii testu (S2, 5.10; pliki w
+    `dane/splits/` tylko do odczytu)
+  - [x] wspólna `evaluate()` + Dummy ×2 (6.10) i TF-IDF+LR (7.10) w MLflow — wyniki w tabeli niżej
+  - [x] zapis/odczyt modelu (`models/persistence.py`, 9.10): joblib + metadane (wersje bibliotek,
+    hash mapy etykiet, id runu); identyczne predykcje w nowym procesie, udowodnione testem
+  - [x] krótka EDA z wnioskami (`notebooks/01_eda.ipynb`, sekcje 1–8, 6.10); długości w tokenach
+    → sob 10.10, redakcja wniosków → wt 13.10
+  - [ ] test uruchomienia DistilBERT na GPU + przypięcie rewizji wag (`PIN-ME`) → sob 10.10
+  - Bramka po W1: 4.10 nie przeszła (brak baseline'u w MLflow i testu zapisu/odczytu), warunkowo
+    kontynuowano; **powtórka pt 9.10: zielona — kontynuujemy, W2 od 10.10** (szczegóły:
+    *Bramka po W1 i fallback*)
   - Co nie zadziałało: twarde minimum nie zmieściło się w weekendzie 3–4.10 — baseline
     w MLflow i zapis/odczyt przechodzą na wieczory 5–9.10 (pierwsze do cięcia: DistilBERT, EDA)
 - [x] **2.10 — zależności pod BANKING77**: z zależności głównych usunięte `xgboost`, `duckdb`,
@@ -313,17 +324,31 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
 - [x] **2.10 — porządki po poprzednim temacie**: notebook EDA, `csv_to_parquet.py`, `sanity_w1.py`
       i loader US Accidents usunięte z repo (treść w historii gita do commita `5c94e05`; kopie
       robocze i dane poza repo). Loader BANKING77 i nowy `notebooks/01_eda.ipynb` powstają w W1
-- Rezerwa: zużyto **0 z 8 h** (stan po weekendzie W1, 4.10; aktualizacja na koniec każdego slotu)
+- Rezerwa: zużyto **8 z 8 h** (stan po W1, 9.10: W1 zajął 20 h przy budżecie 12 h; kolejne
+  nadwyżki = świadome nadgodziny albo cięcie wg kolejności z *Bramka po W1 i fallback*;
+  aktualizacja na koniec każdego slotu)
 
 **Wyniki na walidacji** (W1–W2; zamrożona walidacja z manifestu — do wyboru konfiguracji,
 nie do porównań z literaturą; wszystkie liczby z MLflow):
 
 | Model | Konfiguracja (zamrożona) | Acc (val) | Macro-F1 (val) | N-train / N-val | Budżet HPO | Czas treningu |
 |---|---|---:|---:|---:|---:|---:|
-| Dummy (`most_frequent` / `stratified`) | — | do zmierzenia | | | 0 | |
-| TF-IDF + LR | | do zmierzenia | | | | |
+| Dummy `most_frequent` | — | 1,87% | 0,05% | 8 504 / 1 499 | 0 | < 0,01 s |
+| Dummy `stratified` (seed 42) | — | 1,13% | 1,04% | 8 504 / 1 499 | 0 | < 0,01 s |
+| TF-IDF + LR | W1, przed HPO: wartości domyślne sklearn 1.9 (unigramy, `C` = 1,0, bez wag klas) | 84,39% | 83,89% | 8 504 / 1 499 | 0 (HPO w W2) | 0,50 s |
 | MiniLM + kNN | | do zmierzenia | | | | |
 | DistilBERT | | do zmierzenia | | | | |
+
+TF-IDF + LR: dwa runy tej samej konfiguracji (`89d5ccf6`, `bb347398` — ten drugi dał artefakt
+w `models/`) mają identyczne metryki, co przy okazji potwierdza determinizm treningu.
+
+**Interpretacja (autor, 7.10):** TF-IDF + LR uzyskał accuracy 84,39% i macro-F1 83,89% na 1 499
+zdaniach walidacji wydzielonej z train, po treningu na 8 504 zdaniach; literaturowe 92,1%
+DistilBERT dotyczy testu 3 080 zdań po treningu na pełnych 10 003, więc wyniki nie są
+bezpośrednio porównywalne. Niewielka różnica między metrykami nie wyklucza słabości pojedynczych
+klas: `virtual_card_not_working` ma najniższe F1 (50,0%) i recall (33,3%) przy precision 100% —
+model wskazał tę klasę dwukrotnie, oba razy trafnie, ale pozostałe cztery przykłady przypisał
+innym klasom; przy sześciu przykładach jedna pomyłka zmienia recall o 16,7 punktu procentowego.
 
 **Tabela końcowa** (W3, test dotknięty raz; koszt z W2; wszystkie liczby z MLflow / wykonanego kodu):
 
