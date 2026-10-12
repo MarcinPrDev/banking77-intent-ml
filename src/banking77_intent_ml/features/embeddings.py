@@ -15,9 +15,9 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass
+from importlib import metadata
 
 import numpy as np
-import sentence_transformers
 
 from banking77_intent_ml.config import Settings
 from banking77_intent_ml.data.datasets import TrainVal
@@ -60,12 +60,20 @@ def encode_splits(data: TrainVal, settings: Settings) -> tuple[np.ndarray, np.nd
     return train, val, timing
 
 
+def _library_version() -> str:
+    """Wersja sentence-transformers bez importu biblioteki (CI ma tylko extra `dev`)."""
+    try:
+        return metadata.version("sentence-transformers")
+    except metadata.PackageNotFoundError:  # testy z atrapą kodera w CI
+        return "brak"
+
+
 def _key(data: TrainVal, settings: Settings) -> dict:
     cfg = settings.models.minilm_knn
     return {
         "model_id": cfg.model_id,
         "revision": cfg.revision,
-        "sentence_transformers": sentence_transformers.__version__,
+        "sentence_transformers": _library_version(),
         "sha256_train_ids": ids_sha256(data.x_train.index),
         "sha256_val_ids": ids_sha256(data.x_val.index),
     }
