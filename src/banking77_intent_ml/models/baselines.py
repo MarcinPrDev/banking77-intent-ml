@@ -121,7 +121,10 @@ def run_tfidf_lr(
         settings=settings,
         tags={"model_family": "tfidf_lr", **(tags or {})},
         fit_seconds=fit_seconds,
-        extra_metrics={"n_iter": int(model.named_steps["logreg"].n_iter_[0])},
+        extra_metrics={
+            "n_iter": int(model.named_steps["logreg"].n_iter_[0]),
+            "n_features": len(model.named_steps["tfidf"].vocabulary_),
+        },
     )
     return BaselineRun(
         name=name, run_id=run_id, result=result, fit_seconds=fit_seconds, model=model

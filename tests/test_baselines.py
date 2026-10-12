@@ -135,4 +135,5 @@ def test_tfidf_lr_run_is_logged(toy_data, tmp_mlflow_settings, monkeypatch):
         "macro_f1": run.result.macro_f1,
         "fit_seconds": run.fit_seconds,
         "n_iter": int(model.named_steps["logreg"].n_iter_[0]),
+        "n_features": len(model.named_steps["tfidf"].vocabulary_),
     })

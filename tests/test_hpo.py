@@ -1,21 +1,26 @@
 """Testy HPO TF-IDF + LR (models/hpo.py, W2 S1).
 
 Infra: każda próba = osobny run MLflow z tagami badania; blokada budżetu w CLI (drugie badanie
-odmawia przed treningiem). Szkielet testów autora (przestrzeń, cel, wybór zwycięzcy) — `skip`.
+odmawia przed treningiem). Przestrzeń, cel i wybór zwycięzcy sprawdzane bez danych BANKING77.
 """
 
 from __future__ import annotations
 
 import importlib.util
+from copy import deepcopy
 from dataclasses import replace
+from itertools import permutations, product
 from pathlib import Path
 
+import optuna
 import pandas as pd
 import pytest
 from mlflow.tracking import MlflowClient
 
+from banking77_intent_ml.config import load_settings
 from banking77_intent_ml.config.settings import TfidfLrHpoConfig
 from banking77_intent_ml.data.datasets import TrainVal
+from banking77_intent_ml.evaluation.metrics import evaluate
 from banking77_intent_ml.evaluation.tracking import count_runs_with_tag
 from banking77_intent_ml.models import hpo
 
@@ -70,6 +75,7 @@ def test_every_trial_is_a_tagged_mlflow_run(toy_data, tmp_mlflow_settings, monke
         assert run.data.params["logreg__C"] == str(trial.config.logreg["C"])
         assert trial.objective == trial.result.macro_f1
         assert trial.n_features > 0
+        assert run.data.metrics["n_features"] == trial.n_features
 
 
 def test_hpo_requires_tpe_sampler(toy_data, tmp_mlflow_settings):
@@ -99,19 +105,88 @@ def test_cli_refuses_second_study_before_training(tmp_mlflow_settings, monkeypat
     assert "budżet" in capsys.readouterr().out
 
 
-# --- Testy autora (W2 S1): treść pisze autor, potem usuwa `skip` -------------------------------
+# --- Przestrzeń, cel i reguła wyboru (W2 S1) --------------------------------------------------
 
 
-@pytest.mark.skip(reason="W2 S1: test pisze autor")
-def test_suggest_stays_within_configured_space():
-    """Każda próba ma parametry z przestrzeni z configu; `ngram_range` jest krotką."""
+@pytest.mark.parametrize("custom_space", [False, True])
+def test_suggest_stays_within_configured_space(custom_space):
+    """Odczyt przestrzeni, rozkład log(C), krotki i brak mutacji konfiguracji bazowej."""
+    settings = load_settings()
+    base = settings.models.tfidf_lr
+    if custom_space:
+        space = {
+            "representation": {"word_trigrams": {"analyzer": "word", "ngram_range": [1, 3]}},
+            "min_df": [3],
+            "sublinear_tf": [True],
+            "C": {"low": 0.25, "high": 4.0},
+            "class_weight": ["balanced"],
+        }
+        base = replace(base, hpo=replace(base.hpo, space=space))
+        settings = replace(settings, models=replace(settings.models, tfidf_lr=base))
+    space = base.hpo.space
+    original = deepcopy(base)
+    for representation, min_df, sublinear_tf, c, class_weight in product(
+        space["representation"], space["min_df"], space["sublinear_tf"],
+        [space["C"]["low"], space["C"]["high"]], space["class_weight"],
+    ):
+        trial = optuna.trial.FixedTrial({
+            "representation": representation, "min_df": min_df, "sublinear_tf": sublinear_tf,
+            "C": c, "class_weight": class_weight,
+        })
+        config = hpo.suggest_tfidf_lr(trial, settings)
+
+        expected_tfidf = {
+            **original.tfidf, **space["representation"][representation],
+            "ngram_range": tuple(space["representation"][representation]["ngram_range"]),
+            "min_df": min_df, "sublinear_tf": sublinear_tf,
+        }
+        expected_logreg = {**original.logreg, "C": c, "class_weight": class_weight}
+        assert config == replace(original, tfidf=expected_tfidf, logreg=expected_logreg)
+        assert config is not base
+        assert config.tfidf is not base.tfidf
+        assert config.logreg is not base.logreg
+        assert base == original
+        assert isinstance(config.tfidf["ngram_range"], tuple)
+        for name in ("representation", "min_df", "sublinear_tf", "class_weight"):
+            assert trial.distributions[name] == optuna.distributions.CategoricalDistribution(
+                list(space[name])
+            )
+        assert trial.distributions["C"] == optuna.distributions.FloatDistribution(
+            space["C"]["low"], space["C"]["high"], log=True
+        )
 
 
-@pytest.mark.skip(reason="W2 S1: test pisze autor")
-def test_objective_is_selection_metric():
+@pytest.mark.parametrize("metric, expected", [("macro_f1", 3 / 7), ("accuracy", 3 / 4)])
+def test_objective_is_selection_metric(metric, expected):
     """Cel = `evaluation.selection_metric` z configu, liczony na walidacji."""
+    settings = load_settings()
+    settings = replace(settings, evaluation=replace(settings.evaluation, selection_metric=metric))
+    result = evaluate([0, 0, 0, 1], [0, 0, 0, 0], {"a": 0, "b": 1})
+
+    assert hpo.objective_value(result, settings) == pytest.approx(expected)
 
 
-@pytest.mark.skip(reason="W2 S1: test pisze autor")
-def test_select_best_prefers_fewer_features_on_tie():
-    """Różnica celu < `tie_tolerance` -> wygrywa próba z mniejszym `n_features`."""
+@pytest.mark.parametrize(("scores", "features", "tolerance", "winner"), [
+    ([0.9, 0.8995, 0.8988], [100, 80, 10], 0.001, 1),  # bez łańcucha remisów
+    ([0.9, 0.898], [100, 10], 0.001, 0),  # cel ważniejszy od rozmiaru
+    ([0.9, 0.9], [100, 10], 0.001, 1),  # dokładny remis
+    ([0.875, 0.75], [100, 10], 0.125, 0),  # granica: <, nie <= (dokładne floaty)
+    ([0.9], [100], 0.001, 0),
+    ([0.9, 0.898], [100, 10], 0.0, 0),  # zerowa tolerancja zachowuje maksimum
+])
+def test_select_best_prefers_fewer_features_on_tie(scores, features, tolerance, winner):
+    """Remis względem globalnego maksimum; wynik niezależny od kolejności prób."""
+    settings = load_settings()
+    result = evaluate([0, 1], [0, 1], {"a": 0, "b": 1})
+    trials = [
+        hpo.HpoTrial(i, f"run-{i}", settings.models.tfidf_lr, result, score, n_features)
+        for i, (score, n_features) in enumerate(zip(scores, features, strict=True))
+    ]
+
+    for ordered in permutations(trials):
+        assert hpo.select_best(list(ordered), tolerance=tolerance) is trials[winner]
+
+
+def test_select_best_rejects_empty_trials():
+    with pytest.raises(ValueError):
+        hpo.select_best([], tolerance=0.001)
