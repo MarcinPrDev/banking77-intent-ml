@@ -38,6 +38,7 @@ paths:
   # a bez jawnego URI zapisuje do mlflow.db w cwd procesu (np. w notebooks/).
   mlruns: mlruns
   mlflow_db: mlflow.db
+  cache_dir: dane/cache                    # dane pochodne (embeddingi MiniLM) — poza gitem, odtwarzalne
 
 split:
   # Z oryginalnego train wydzielamy walidację; test.csv NIE uczestniczy w żadnym splicie.
@@ -128,8 +129,10 @@ models:
     # Od wcześniejszej c9745ed1 (w lokalnym cache) różni się tylko metadanymi README — pliki modelu
     # i tokenizera mają identyczne hashe.
     revision: "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
-    k_values: [1, 3, 5, 10]                # "kilka k" — lista do potwierdzenia przez autora
+    k_values: [1, 3, 5, 10]                # "kilka k" — przyjęte bez zmian 12.10 (siatka 4 × 2 = 8 runów)
     weights: [uniform, distance]
+    metric: cosine                         # plan W2 §1 pkt 2; MiniLM kończy się modułem Normalize
+    frozen: null                           # zwycięzca siatki {n_neighbors, weights} — wpisuje autor
   distilbert:
     model_id: distilbert/distilbert-base-uncased        # Apache-2.0
     # Commit `main` na HF Hub (ostatnia zmiana 6.05.2024; przypięte 9.10.2026; apache-2.0) — ta sama

@@ -63,6 +63,7 @@ class PathsConfig:
     models_dir: Path
     mlruns: Path  # artefakty runów MLflow (tabele, pliki)
     mlflow_db: Path  # baza SQLite z runami MLflow (parametry, metryki, tagi)
+    cache_dir: Path  # dane pochodne (embeddingi) — poza gitem, odtwarzalne
 
 
 @dataclass(frozen=True)
@@ -111,6 +112,8 @@ class MinilmKnnConfig:
     revision: str
     k_values: tuple[int, ...]
     weights: tuple[str, ...]
+    metric: str = "cosine"  # w YAML-u wymagane; domyślne tylko dla konfiguracji budowanych w kodzie
+    frozen: dict[str, Any] | None = None  # zwycięzca siatki {n_neighbors, weights} albo None
 
 
 @dataclass(frozen=True)
@@ -253,6 +256,7 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
             models_dir=_abs(raw["paths"]["models_dir"]),
             mlruns=_abs(raw["paths"]["mlruns"]),
             mlflow_db=_abs(raw["paths"]["mlflow_db"]),
+            cache_dir=_abs(raw["paths"]["cache_dir"]),
         ),
         split=SplitConfig(
             val_size=float(sp["val_size"]),
@@ -277,6 +281,8 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
                 revision=str(md["minilm_knn"]["revision"]),
                 k_values=tuple(int(k) for k in md["minilm_knn"]["k_values"]),
                 weights=tuple(md["minilm_knn"]["weights"]),
+                metric=str(md["minilm_knn"]["metric"]),
+                frozen=md["minilm_knn"]["frozen"],
             ),
             distilbert=DistilbertConfig(
                 model_id=md["distilbert"]["model_id"],

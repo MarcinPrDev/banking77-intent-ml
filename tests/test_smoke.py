@@ -53,6 +53,8 @@ def test_settings_load() -> None:
     assert isinstance(s.models.distilbert.lr, float)
     assert isinstance(s.models.distilbert.max_len, int) and s.models.distilbert.max_len > 0
     assert all(isinstance(k, int) for k in s.models.minilm_knn.k_values)
+    assert s.models.minilm_knn.metric == "cosine"
+    assert s.paths.cache_dir.is_absolute()
     # TF-IDF + LR (decyzja 7.10): słowniki parametrów sklearn; YAML nie ma krotek
     assert isinstance(s.models.tfidf_lr.tfidf["ngram_range"], tuple)
     assert isinstance(s.models.tfidf_lr.logreg, dict)
