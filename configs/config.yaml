@@ -163,7 +163,14 @@ models:
       - {lr: 5.0e-5}
       - {lr: 6.0e-5}
     tie_tolerance: 0.001
-    frozen: null                           # zwycięzca {lr, epoch} — wpisuje autor po wyborze
+    # Zamrożona konfiguracja (decyzja autora 13.10.2026): wariant 4 (LR 6e-5), epoka 4 — run
+    # f37e7471 (walidacja: macro-F1 0,9076, accuracy 0,9099; checkpoint epoki 4 odtwarza te liczby).
+    # Epoka 5 miała 0,9078 — remis (< tie_tolerance), więc mniej epok. Zwycięzca leży na brzegu
+    # siatki LR — ograniczenie opisane w README; dalsze strojenie dopiero po oddaniu (decyzja C).
+    # Artefakt: paths.models_dir/distilbert (wagi + tokenizer + id2label + metadata.json).
+    frozen:
+      lr: 6.0e-5
+      epoch: 4
 
 llm:
   # Stretch A (po domknięciu rdzenia). Jeden model, jeden zamrożony prompt, dobór promptu TYLKO
