@@ -8,8 +8,8 @@ epoka oceniana na walidacji; zwycięzca spośród par (wariant, epoka): najwyżs
 Infra (`run_variant`, `run_distilbert`): tokenizacja (`max_len`, dynamiczny padding), Trainer,
 wagi po każdej epoce w cache (`paths.cache_dir/distilbert/variant-N/checkpoint-*`, same wagi
 z tokenizerem), krzywe per epoka i wynik najlepszej epoki wariantu w MLflow (tabele per klasa
-przez wspólne `evaluate()` na predykcjach z ewaluacji tej epoki). Autor: `training_arguments`,
-`compute_metrics`, `select_best_distilbert`. Budżet pilnuje CLI (`scripts/train_distilbert.py`).
+przez wspólne `evaluate()` na predykcjach z ewaluacji tej epoki). Reguła wyboru checkpointu
+ustalona przed treningiem; budżet pilnuje CLI (`scripts/train_distilbert.py`).
 """
 
 from __future__ import annotations
@@ -68,16 +68,35 @@ def training_arguments(
 ) -> TrainingArguments:
     """Konfiguracja Trainera dla jednego wariantu.
 
-    TODO(Marcin, W2 S3). Kontrakt:
-    - hiperparametry z `models.distilbert` (batch, epoki, warmup, weight decay) i z wariantu
-      (`lr`) — nic na sztywno; seed z `models.seed`;
-    - `eval_strategy` i `save_strategy` = "epoch", `save_only_model=True` — pętla czyta
-      checkpoint każdej epoki z `output_dir`; `load_best_model_at_end=False`, bo epokę wybiera
-      Twoja reguła, nie Trainer;
-    - `report_to="none"` (do MLflow loguje pętla), `dataloader_num_workers=0` (Windows),
-      precyzja (np. bf16) — Twoja decyzja.
+    LR z wariantu, batch/epoki/warmup/weight decay z configu; seed treningu i danych
+    z `models.seed`. Ocena i zapis samych wag co epokę, wszystkie checkpointy zachowane.
+    Wybór epoki i MLflow obsługuje pętla projektu. Na CUDA używamy BF16, jeśli jest
+    obsługiwane; w pozostałych przypadkach FP32, bez CUDA trening odbywa się na CPU.
+    Brak procesów roboczych DataLoadera pozwala uruchamiać trening na Windows.
     """
-    raise NotImplementedError("W2 S3: training_arguments — pisze autor")
+    cfg = settings.models.distilbert
+    cuda = torch.cuda.is_available()
+    return TrainingArguments(
+        output_dir=str(output_dir),
+        learning_rate=variant["lr"],
+        num_train_epochs=cfg.epochs,
+        per_device_train_batch_size=cfg.batch_size,
+        per_device_eval_batch_size=cfg.batch_size,
+        warmup_steps=cfg.warmup_ratio,
+        weight_decay=cfg.weight_decay,
+        eval_strategy="epoch",
+        save_strategy="epoch",
+        save_only_model=True,
+        save_total_limit=None,
+        load_best_model_at_end=False,
+        report_to="none",
+        dataloader_num_workers=0,
+        seed=settings.models.seed,
+        data_seed=settings.models.seed,
+        bf16=cuda and torch.cuda.is_bf16_supported(),
+        fp16=False,
+        use_cpu=not cuda,
+    )
 
 
 def compute_metrics(
@@ -85,19 +104,36 @@ def compute_metrics(
 ) -> dict[str, float]:
     """Metryki jednej ewaluacji (po epoce) dla Trainera.
 
-    TODO(Marcin, W2 S3). Kontrakt: logity -> id klas; ta sama `evaluate()` co dla innych
-    ścieżek; zwraca `result.metrics()` (Trainer doda prefiks `eval_`).
+    Pierwszy element krotki predykcji to logity, jeśli model zwraca dodatkowe wyjścia.
+    Argmax po klasach daje id z mapy; wspólne `evaluate()` uwzględnia wszystkie klasy.
+    Zwraca `result.metrics()` — prefiks `eval_` dodaje Trainer.
     """
-    raise NotImplementedError("W2 S3: compute_metrics — pisze autor")
+    logits = eval_pred.predictions
+    logits = logits[0] if isinstance(logits, tuple) else logits
+    predicted_ids = np.asarray(logits).argmax(axis=-1)
+    return evaluate(eval_pred.label_ids, predicted_ids, label_map).metrics()
 
 
 def select_best_distilbert(scores: list[EpochScore], *, tolerance: float) -> EpochScore:
     """Zwycięzca spośród par (wariant, epoka).
 
-    TODO(Marcin, W2 S3). Kontrakt: najwyższy `objective`; remis (różnica < `tolerance` względem
-    maksimum) -> mniej epok; dalsze rozstrzyganie — Twoje (opisz tutaj).
+    Reguła ustalona przed treningiem: najwyższy `objective`; różnica < `tolerance` względem
+    globalnego maksimum oznacza remis, w którym wygrywa mniej epok. Dalej rozstrzyga wyższy
+    cel, niższy numer wariantu, leksykograficznie mniejszy `run_id`, potem ścieżka checkpointu.
+    Przy zerowej tolerancji rozpatrujemy tylko dokładne maksima. Kolejność wejścia nie ma
+    znaczenia; pusta lista zgłasza ValueError.
     """
-    raise NotImplementedError("W2 S3: select_best_distilbert — pisze autor")
+    best_value = max(score.objective for score in scores)
+    tied = [
+        score for score in scores
+        if score.objective == best_value or best_value - score.objective < tolerance
+    ]
+    return min(
+        tied,
+        key=lambda score: (
+            score.epoch, -score.objective, score.variant, score.run_id, score.checkpoint.as_posix()
+        ),
+    )
 
 
 def _load_tokenizer(settings: Settings):
@@ -180,7 +216,7 @@ def run_variant(index: int, data: TrainVal, settings: Settings) -> DistilbertRun
             "epochs": args.num_train_epochs,
             "batch_size": args.per_device_train_batch_size,
             "max_len": cfg.max_len,
-            "warmup_ratio": args.warmup_ratio,
+            "warmup_steps": args.warmup_steps,  # ułamek w [0, 1) = proporcja kroków (5.x)
             "weight_decay": args.weight_decay,
             "seed": args.seed,
             "bf16": args.bf16,
