@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 from importlib import metadata
 
 import numpy as np
@@ -58,6 +60,24 @@ def encode_splits(data: TrainVal, settings: Settings) -> tuple[np.ndarray, np.nd
         "encode_train_seconds": encode_train_seconds,
     }
     return train, val, timing
+
+
+@lru_cache(maxsize=2)
+def _sentence_model(model_id: str, revision: str, device: str):
+    """Model ładowany raz na proces (API, predyktor) — klucz: model, rewizja, urządzenie."""
+    from sentence_transformers import SentenceTransformer
+
+    return SentenceTransformer(model_id, revision=revision, device=device)
+
+
+def encode_texts(texts: Sequence[str], settings: Settings) -> np.ndarray:
+    """Embeddingi dowolnych tekstów (np. zapytań do API) z przypiętej rewizji MiniLM."""
+    import torch
+
+    cfg = settings.models.minilm_knn
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = _sentence_model(cfg.model_id, cfg.revision, device)
+    return model.encode(list(texts), convert_to_numpy=True, show_progress_bar=False)
 
 
 def _library_version() -> str:

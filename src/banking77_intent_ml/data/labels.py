@@ -10,8 +10,14 @@ Uruchomienie: `uv run python scripts/make_label_map.py`.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from banking77_intent_ml.config import Settings
 
 
 class LabelMapError(ValueError):
@@ -48,3 +54,30 @@ def write_or_verify_label_map(label_map: dict[str, int], path: Path) -> bool:
     text = json.dumps(label_map, ensure_ascii=False, indent=2) + "\n"
     path.write_text(text, encoding="utf-8", newline="\n")
     return True
+
+
+@dataclass(frozen=True)
+class LabelMap:
+    """Jedna mapa nazwa <-> id dla modeli i API (README → Architektura), z `dataset.label_map_path`.
+
+    Predyktory zwracają id (decyzja autora 13.10.2026); nazwy intencji mapuje ta klasa.
+    """
+
+    name_to_id: Mapping[str, int]
+
+    @classmethod
+    def from_settings(cls, settings: Settings) -> LabelMap:
+        return cls(load_label_map(settings.dataset.label_map_path))
+
+    @cached_property
+    def _id_to_name(self) -> dict[int, str]:
+        return {class_id: name for name, class_id in self.name_to_id.items()}
+
+    def id(self, name: str) -> int:
+        return self.name_to_id[name]
+
+    def name(self, class_id: int) -> str:
+        return self._id_to_name[int(class_id)]
+
+    def __len__(self) -> int:
+        return len(self.name_to_id)
