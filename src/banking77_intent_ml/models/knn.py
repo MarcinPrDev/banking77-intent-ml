@@ -3,7 +3,7 @@
 Siatka z configu: `models.minilm_knn.k_values` × `weights` (budżet = cała siatka, 4 × 2 = 8),
 metryka `metric` (cosine). Embeddingi z `features.embeddings` (przypięta rewizja, cache):
 klasyfikator uczy się na embeddingach części treningowej, ocena na walidacji przez wspólne
-`evaluate()`. Pętla (`run_knn_grid`) to infra; budowa klasyfikatora i wybór zwycięzcy — autor.
+`evaluate()`. Reguła wyboru zwycięzcy jest ustalona przed uruchomieniem siatki.
 Budżet pilnuje CLI: drugie badanie o tej samej nazwie = odmowa przed liczeniem.
 """
 
@@ -36,20 +36,33 @@ class KnnTrial:
 def build_knn(n_neighbors: int, weights: str, settings: Settings) -> KNeighborsClassifier:
     """Nieuczony klasyfikator kNN dla jednego punktu siatki.
 
-    TODO(Marcin, W2 S2). Kontrakt:
-    - `n_neighbors` i `weights` z argumentów, metryka z `models.minilm_knn.metric` (cosine);
-    - pozostałe parametry (np. `algorithm`) — Twoja decyzja; wszystkie trafią do MLflow.
+    `n_neighbors` i `weights` z argumentów, metryka z `models.minilm_knn.metric`.
+    Jawny `brute` obsługuje cosine i nie uzależnia wyboru algorytmu od heurystyki `auto`.
+    Pozostałe parametry są domyślne; komplet parametrów zapisuje `run_knn_grid` w MLflow.
     """
-    raise NotImplementedError("W2 S2: build_knn — pisze autor")
+    return KNeighborsClassifier(
+        n_neighbors=n_neighbors,
+        weights=weights,
+        metric=settings.models.minilm_knn.metric,
+        algorithm="brute",
+    )
 
 
 def select_best_knn(trials: list[KnnTrial]) -> KnnTrial:
-    """Zwycięzca siatki.
+    """Zwycięzca siatki — reguła ustalona 12.10.2026 przed jej uruchomieniem.
 
-    TODO(Marcin, W2 S2). Kontrakt: najwyższy `objective`; regułę remisu ustalasz przed
-    uruchomieniem siatki (tak jak w HPO TF-IDF) i opisujesz tutaj.
+    Najwyższy `objective`. Remis oznacza dokładną równość celu (bez tolerancji):
+    preferujemy mniejsze `n_neighbors`, następnie `uniform` przed `distance` — mniejsze
+    sąsiedztwo i prostsze głosowanie. To preferencja konfiguracyjna, nie pomiar kosztu.
+    Przy powtórzonym punkcie rozstrzyga leksykograficznie najmniejszy `run_id`, więc kolejność
+    prób nie wpływa na wybór. Pusta lista zgłasza ValueError.
     """
-    raise NotImplementedError("W2 S2: select_best_knn — pisze autor")
+    return min(
+        trials,
+        key=lambda trial: (
+            -trial.objective, trial.n_neighbors, trial.weights != "uniform", trial.run_id
+        ),
+    )
 
 
 def run_knn_grid(data: TrainVal, embeddings: SplitEmbeddings, settings: Settings) -> list[KnnTrial]:
@@ -69,6 +82,10 @@ def run_knn_grid(data: TrainVal, embeddings: SplitEmbeddings, settings: Settings
                     "model": "minilm_knn",
                     "model_id": cfg.model_id,
                     "revision": cfg.revision,
+                    # wektory zależą też od wersji biblioteki i urządzenia (GPU/CPU: różnice
+                    # w ostatnich bitach) — oba z metadanych cache embeddingów
+                    "sentence_transformers": embeddings.meta["sentence_transformers"],
+                    "embedding_device": embeddings.meta["device"],
                     **{f"knn__{key}": value for key, value in model.get_params().items()},
                 },
                 result=result,

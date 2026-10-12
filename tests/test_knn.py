@@ -1,13 +1,14 @@
 """Testy MiniLM + kNN (models/knn.py, W2 S2).
 
 Infra: każdy punkt siatki = osobny run MLflow z tagami badania; blokada budżetu w CLI (druga
-siatka odmawia przed liczeniem). Szkielet testów autora (klasyfikator, wybór zwycięzcy) — `skip`.
+siatka odmawia przed liczeniem). Klasyfikator i reguła wyboru sprawdzane na sztucznych danych.
 """
 
 from __future__ import annotations
 
 import importlib.util
 from dataclasses import replace
+from itertools import permutations
 from pathlib import Path
 
 import numpy as np
@@ -16,7 +17,9 @@ import pytest
 from mlflow.tracking import MlflowClient
 from sklearn.neighbors import KNeighborsClassifier
 
+from banking77_intent_ml.config import load_settings
 from banking77_intent_ml.data.datasets import TrainVal
+from banking77_intent_ml.evaluation.metrics import evaluate
 from banking77_intent_ml.evaluation.tracking import count_runs_with_tag
 from banking77_intent_ml.features.embeddings import SplitEmbeddings
 from banking77_intent_ml.models import knn
@@ -41,11 +44,11 @@ def toy() -> tuple[TrainVal, SplitEmbeddings]:
     val = centers[[0, 1, 2]] + 0.05 * rng.normal(size=(3, 3))
     train /= np.linalg.norm(train, axis=1, keepdims=True)
     val /= np.linalg.norm(val, axis=1, keepdims=True)
-    meta = {"encode_train_seconds": 0.1}
+    meta = {"encode_train_seconds": 0.1, "sentence_transformers": "test", "device": "cpu"}
     return data, SplitEmbeddings(train, val, meta, from_cache=True)
 
 
-def test_every_grid_point_is_a_tagged_mlflow_run(toy, tmp_mlflow_settings, monkeypatch):
+def test_every_grid_point_is_a_tagged_mlflow_run(toy, tmp_mlflow_settings):
     data, emb = toy
     minilm = replace(
         tmp_mlflow_settings.models.minilm_knn, k_values=(1, 3), weights=("uniform", "distance")
@@ -53,11 +56,6 @@ def test_every_grid_point_is_a_tagged_mlflow_run(toy, tmp_mlflow_settings, monke
     settings = replace(
         tmp_mlflow_settings, models=replace(tmp_mlflow_settings.models, minilm_knn=minilm)
     )
-    monkeypatch.setattr(
-        knn, "build_knn",
-        lambda k, weights, settings: KNeighborsClassifier(k, weights=weights, metric="cosine"),
-    )
-
     trials = knn.run_knn_grid(data, emb, settings)
 
     assert [(t.n_neighbors, t.weights) for t in trials] == [
@@ -70,8 +68,12 @@ def test_every_grid_point_is_a_tagged_mlflow_run(toy, tmp_mlflow_settings, monke
         assert run.data.tags["mlflow.runName"] == f"minilm-knn-k{trial.n_neighbors}-{trial.weights}"
         assert run.data.tags["model_family"] == "minilm_knn"
         assert run.data.params["knn__n_neighbors"] == str(trial.n_neighbors)
+        assert run.data.params["knn__weights"] == trial.weights
         assert run.data.params["knn__metric"] == "cosine"
+        assert run.data.params["knn__algorithm"] == "brute"
         assert run.data.params["revision"] == settings.models.minilm_knn.revision
+        assert run.data.params["sentence_transformers"] == "test"
+        assert run.data.params["embedding_device"] == "cpu"
         assert run.data.metrics["encode_train_seconds"] == pytest.approx(0.1)
         assert trial.objective == trial.result.macro_f1
 
@@ -93,14 +95,54 @@ def test_cli_refuses_second_grid_before_computing(tmp_mlflow_settings, monkeypat
     assert "budżet" in capsys.readouterr().out
 
 
-# --- Testy autora (W2 S2): treść pisze autor, potem usuwa `skip` -------------------------------
+# --- Klasyfikator i reguła wyboru (W2 S2) -----------------------------------------------------
 
 
-@pytest.mark.skip(reason="W2 S2: test pisze autor")
-def test_build_knn_uses_grid_point_and_config_metric():
+@pytest.mark.parametrize(("n_neighbors", "weights", "metric"), [
+    (1, "uniform", "cosine"),
+    (3, "distance", "cosine"),
+    (2, "distance", "euclidean"),  # metryka z configu, nie wpisana na sztywno
+])
+def test_build_knn_uses_grid_point_and_config_metric(n_neighbors, weights, metric):
     """`n_neighbors` i `weights` z argumentów, metryka z configu; klasyfikator nieuczony."""
+    settings = load_settings()
+    minilm = replace(settings.models.minilm_knn, metric=metric)
+    settings = replace(settings, models=replace(settings.models, minilm_knn=minilm))
+
+    model = knn.build_knn(n_neighbors, weights, settings)
+
+    assert isinstance(model, KNeighborsClassifier)
+    params = model.get_params()
+    assert params["n_neighbors"] == n_neighbors
+    assert params["weights"] == weights
+    assert params["metric"] == metric
+    assert params["algorithm"] == "brute"
+    assert not hasattr(model, "classes_")
+    assert not hasattr(model, "n_features_in_")
 
 
-@pytest.mark.skip(reason="W2 S2: test pisze autor")
-def test_select_best_knn_rule():
-    """Najwyższy cel; remis rozstrzygany regułą autora, niezależnie od kolejności prób."""
+@pytest.mark.parametrize(("points", "winner"), [
+    ([(1, "uniform", 0.8, "a"), (3, "distance", 0.9, "b")], "b"),
+    ([(1, "uniform", 0.9, "a"), (3, "distance", 0.9001, "b")], "b"),  # brak tolerancji
+    ([(3, "uniform", 0.9, "a"), (1, "distance", 0.9, "b")], "b"),  # najpierw mniejsze k
+    ([(3, "distance", 0.9, "a"), (3, "uniform", 0.9, "b")], "b"),  # potem uniform
+    ([(3, "uniform", 0.9, "b"), (3, "uniform", 0.9, "a")], "a"),  # powtórzony punkt
+    ([(1, "uniform", 0.9, "a")], "a"),
+    ([], None),
+])
+def test_select_best_knn_rule(points, winner):
+    """Najwyższy cel, potem mniejsze k, uniform i run_id; wszystkie permutacje i pusty zbiór."""
+    result = evaluate([0, 1], [0, 1], {"a": 0, "b": 1})
+    trials = [
+        knn.KnnTrial(k, weights, run_id, replace(result, macro_f1=score), score)
+        for k, weights, score, run_id in points
+    ]
+
+    if winner is None:
+        with pytest.raises(ValueError):
+            knn.select_best_knn(trials)
+        return
+
+    expected = next(trial for trial in trials if trial.run_id == winner)
+    for ordered in permutations(trials):
+        assert knn.select_best_knn(list(ordered)) is expected
