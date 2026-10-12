@@ -127,6 +127,35 @@ class DistilbertConfig:
     warmup_ratio: float
     weight_decay: float
     configs: int
+    # W YAML-u wymagane; domyślne tylko dla konfiguracji budowanych w kodzie (testy).
+    variants: tuple[dict[str, Any], ...] = ()  # nadpisania bazy (np. {"lr": 2e-5}), len == configs
+    tie_tolerance: float = 0.001
+    frozen: dict[str, Any] | None = None  # zwycięzca {lr, epoch} albo None
+
+
+def _distilbert(raw: dict) -> DistilbertConfig:
+    variants = tuple(
+        {key: float(value) if key == "lr" else value for key, value in variant.items()}
+        for variant in raw["variants"]
+    )
+    if len(variants) != int(raw["configs"]):
+        raise ValueError(
+            f"models.distilbert: {len(variants)} wariantów, a budżet configs = {raw['configs']}"
+        )
+    return DistilbertConfig(
+        model_id=raw["model_id"],
+        revision=str(raw["revision"]),
+        max_len=int(raw["max_len"]),
+        epochs=int(raw["epochs"]),
+        lr=float(raw["lr"]),
+        batch_size=int(raw["batch_size"]),
+        warmup_ratio=float(raw["warmup_ratio"]),
+        weight_decay=float(raw["weight_decay"]),
+        configs=int(raw["configs"]),
+        variants=variants,
+        tie_tolerance=float(raw["tie_tolerance"]),
+        frozen=raw["frozen"],
+    )
 
 
 @dataclass(frozen=True)
@@ -284,17 +313,7 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
                 metric=str(md["minilm_knn"]["metric"]),
                 frozen=md["minilm_knn"]["frozen"],
             ),
-            distilbert=DistilbertConfig(
-                model_id=md["distilbert"]["model_id"],
-                revision=str(md["distilbert"]["revision"]),
-                max_len=int(md["distilbert"]["max_len"]),
-                epochs=int(md["distilbert"]["epochs"]),
-                lr=float(md["distilbert"]["lr"]),
-                batch_size=int(md["distilbert"]["batch_size"]),
-                warmup_ratio=float(md["distilbert"]["warmup_ratio"]),
-                weight_decay=float(md["distilbert"]["weight_decay"]),
-                configs=int(md["distilbert"]["configs"]),
-            ),
+            distilbert=_distilbert(md["distilbert"]),
         ),
         llm=LlmConfig(
             enabled=bool(llm["enabled"]),

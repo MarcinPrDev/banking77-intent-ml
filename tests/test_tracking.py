@@ -79,3 +79,32 @@ def test_extra_metrics_cannot_overwrite_run_metrics(tmp_mlflow_settings, name):
     client = MlflowClient(settings.mlflow.tracking_uri)
     experiment = client.get_experiment_by_name(settings.mlflow.experiment)
     assert experiment is None or not client.search_runs([experiment.experiment_id])
+
+
+def test_curves_are_logged_per_epoch(tmp_mlflow_settings):
+    settings = tmp_mlflow_settings
+    result = evaluate([0, 1], [0, 1], {"a": 0, "b": 1})
+    run_id = log_validation_run(
+        run_name="pytest-curves",
+        params={"model": "test"},
+        result=result,
+        settings=settings,
+        curves={"val_macro_f1": [0.5, 0.75, 0.875]},
+    )
+
+    history = MlflowClient(settings.mlflow.tracking_uri).get_metric_history(run_id, "val_macro_f1")
+    assert [(m.step, m.value) for m in sorted(history, key=lambda m: m.step)] == [
+        (1, 0.5), (2, 0.75), (3, 0.875),
+    ]
+
+
+def test_curves_cannot_overwrite_run_metrics(tmp_mlflow_settings):
+    result = evaluate([0, 1], [0, 1], {"a": 0, "b": 1})
+    with pytest.raises(ValueError, match="nadpisałyby"):
+        log_validation_run(
+            run_name="pytest-curves-clash",
+            params={"model": "test"},
+            result=result,
+            settings=tmp_mlflow_settings,
+            curves={"macro_f1": [0.5]},
+        )

@@ -34,7 +34,11 @@ llm = [
 # RTX 5080 = Blackwell/sm_120: torch MUSI pochodzić z indeksu cu128 (patrz [tool.uv.sources]);
 # koło z PyPI (CPU/starsze CUDA) nie zobaczy karty. Środowisko lokalne — zawsze pełna lista extras
 # (`uv sync` jest exact, pominięte extras są usuwane): uv sync --extra dev --extra nlp --extra gpu --extra serving
-gpu = ["torch>=2.7", "transformers>=4.44"]
+gpu = [
+    "accelerate>=1.1.0",
+    "torch>=2.7",
+    "transformers>=4.44",
+]
 # API (od W2): FastAPI + uvicorn; httpx jest wymagany przez TestClient. Bez torcha — obraz Docker
 # z modelem wymagającym torcha dostanie osobny extra z indeksem CPU (decyzja w W3).
 serving = [

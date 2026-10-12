@@ -77,17 +77,21 @@ def log_validation_run(
     tags: dict[str, str] | None = None,
     fit_seconds: float | None = None,
     extra_metrics: dict[str, float] | None = None,
+    curves: dict[str, list[float]] | None = None,
 ) -> str:
     """Run MLflow: parametry, metryki z configu (+ czas fitu i `extra_metrics`), tagi protokołu,
-    tabele; zwraca id. Kolizja nazw w `extra_metrics` = błąd, zanim powstanie jakikolwiek run."""
+    tabele; zwraca id. `curves`: wartości per epoka jako metryki z krokiem 1, 2, … (np. krzywa
+    macro-F1 na walidacji). Kolizja nazw = błąd, zanim powstanie jakikolwiek run."""
     configured = {settings.evaluation.primary_metric, settings.evaluation.selection_metric}
     missing = configured - set(result.metrics())
     if missing:
         raise ValueError(f"evaluate() nie liczy metryk wskazanych w configu: {sorted(missing)}")
     extra = dict(extra_metrics or {})
+    curves = dict(curves or {})
     clash = {*result.metrics(), "fit_seconds"} & set(extra)
+    clash |= {*result.metrics(), "fit_seconds", *extra} & set(curves)
     if clash:
-        raise ValueError(f"extra_metrics nadpisałyby metryki runu: {sorted(clash)}")
+        raise ValueError(f"extra_metrics/curves nadpisałyby metryki runu: {sorted(clash)}")
 
     configure_mlflow(settings)
     run_tags = {**protocol_tags(settings), **(tags or {})}
@@ -98,6 +102,9 @@ def log_validation_run(
             metrics["fit_seconds"] = fit_seconds
         metrics.update(extra)
         mlflow.log_metrics(metrics)
+        for name, values in curves.items():
+            for step, value in enumerate(values, start=1):
+                mlflow.log_metric(name, value, step=step)
         mlflow.log_table(result.per_class.reset_index(), artifact_file=PER_CLASS_ARTIFACT)
         mlflow.log_table(result.confusion.reset_index(), artifact_file=CONFUSION_ARTIFACT)
         return run.info.run_id

@@ -1,0 +1,218 @@
+"""DistilBERT fine-tuning (głowica 77 klas) na zamrożonej walidacji (W2, S3) — run na wariant.
+
+Decyzje autora (12.10.2026): warianty `models.distilbert.variants` (LR {2, 3, 4, 5, 6}e-5,
+5 epok; budżet zmieniony z 2–3 na 5 przed wynikami), reszta jak Qi i in. 2021 z configu. Każda
+epoka oceniana na walidacji; zwycięzca spośród par (wariant, epoka): najwyższy
+`evaluation.selection_metric`, remis (< `tie_tolerance`) -> mniej epok.
+
+Infra (`run_variant`, `run_distilbert`): tokenizacja (`max_len`, dynamiczny padding), Trainer,
+wagi po każdej epoce w cache (`paths.cache_dir/distilbert/variant-N/checkpoint-*`, same wagi
+z tokenizerem), krzywe per epoka i wynik najlepszej epoki wariantu w MLflow (tabele per klasa
+przez wspólne `evaluate()` na predykcjach z ewaluacji tej epoki). Autor: `training_arguments`,
+`compute_metrics`, `select_best_distilbert`. Budżet pilnuje CLI (`scripts/train_distilbert.py`).
+"""
+
+from __future__ import annotations
+
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+import torch
+import transformers
+from transformers import (
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+    DataCollatorWithPadding,
+    EvalPrediction,
+    Trainer,
+    TrainingArguments,
+    set_seed,
+)
+
+from banking77_intent_ml.config import Settings
+from banking77_intent_ml.data.datasets import TrainVal
+from banking77_intent_ml.evaluation.metrics import evaluate
+from banking77_intent_ml.evaluation.tracking import log_validation_run
+from banking77_intent_ml.models.hpo import STUDY_TAG
+
+STUDY_NAME = "distilbert_w2"  # wartość tagu `hpo_study` — jedno badanie = wszystkie warianty
+CACHE_SUBDIR = "distilbert"
+
+
+@dataclass(frozen=True)
+class EpochScore:
+    variant: int  # indeks wariantu w `models.distilbert.variants`
+    lr: float
+    epoch: int
+    objective: float  # evaluation.selection_metric na walidacji po tej epoce
+    checkpoint: Path  # wagi (+ tokenizer) po tej epoce, w cache
+    run_id: str
+
+
+@dataclass(frozen=True)
+class DistilbertRun:
+    variant: int
+    lr: float
+    run_id: str
+    epochs: list[EpochScore]
+    train_seconds: float  # trening z ewaluacją po każdej epoce
+    peak_vram_gb: float
+
+
+def training_arguments(
+    variant: dict[str, Any], settings: Settings, output_dir: Path
+) -> TrainingArguments:
+    """Konfiguracja Trainera dla jednego wariantu.
+
+    TODO(Marcin, W2 S3). Kontrakt:
+    - hiperparametry z `models.distilbert` (batch, epoki, warmup, weight decay) i z wariantu
+      (`lr`) — nic na sztywno; seed z `models.seed`;
+    - `eval_strategy` i `save_strategy` = "epoch", `save_only_model=True` — pętla czyta
+      checkpoint każdej epoki z `output_dir`; `load_best_model_at_end=False`, bo epokę wybiera
+      Twoja reguła, nie Trainer;
+    - `report_to="none"` (do MLflow loguje pętla), `dataloader_num_workers=0` (Windows),
+      precyzja (np. bf16) — Twoja decyzja.
+    """
+    raise NotImplementedError("W2 S3: training_arguments — pisze autor")
+
+
+def compute_metrics(
+    eval_pred: EvalPrediction, *, settings: Settings, label_map: dict[str, int]
+) -> dict[str, float]:
+    """Metryki jednej ewaluacji (po epoce) dla Trainera.
+
+    TODO(Marcin, W2 S3). Kontrakt: logity -> id klas; ta sama `evaluate()` co dla innych
+    ścieżek; zwraca `result.metrics()` (Trainer doda prefiks `eval_`).
+    """
+    raise NotImplementedError("W2 S3: compute_metrics — pisze autor")
+
+
+def select_best_distilbert(scores: list[EpochScore], *, tolerance: float) -> EpochScore:
+    """Zwycięzca spośród par (wariant, epoka).
+
+    TODO(Marcin, W2 S3). Kontrakt: najwyższy `objective`; remis (różnica < `tolerance` względem
+    maksimum) -> mniej epok; dalsze rozstrzyganie — Twoje (opisz tutaj).
+    """
+    raise NotImplementedError("W2 S3: select_best_distilbert — pisze autor")
+
+
+def _load_tokenizer(settings: Settings):
+    cfg = settings.models.distilbert
+    return AutoTokenizer.from_pretrained(cfg.model_id, revision=cfg.revision)
+
+
+def _load_model(settings: Settings, label_map: dict[str, int]):
+    cfg = settings.models.distilbert
+    return AutoModelForSequenceClassification.from_pretrained(
+        cfg.model_id,
+        revision=cfg.revision,
+        num_labels=len(label_map),
+        id2label={index: name for name, index in label_map.items()},
+        label2id=dict(label_map),
+    )
+
+
+def _features(texts: pd.Series, labels: pd.Series, tokenizer, max_len: int) -> list[dict]:
+    encoded = tokenizer(texts.tolist(), truncation=True, max_length=max_len)
+    return [
+        {"input_ids": ids, "attention_mask": mask, "labels": int(label)}
+        for ids, mask, label in zip(
+            encoded["input_ids"], encoded["attention_mask"], labels.tolist(), strict=True
+        )
+    ]
+
+
+def run_variant(index: int, data: TrainVal, settings: Settings) -> DistilbertRun:
+    """Jeden wariant: trening z oceną po każdej epoce, checkpointy w cache, run w MLflow."""
+    cfg = settings.models.distilbert
+    variant = cfg.variants[index]
+    output_dir = settings.paths.cache_dir / CACHE_SUBDIR / f"variant-{index}"
+    if output_dir.exists() and any(output_dir.iterdir()):
+        raise FileExistsError(f"{output_dir} nie jest pusty — usuń pozostałości po treningu")
+
+    set_seed(settings.models.seed)
+    tokenizer = _load_tokenizer(settings)
+    args = training_arguments(variant, settings, output_dir)
+    predictions: list[np.ndarray] = []  # predykcje każdej ewaluacji (po epoce), w kolejności
+
+    def metrics_fn(eval_pred: EvalPrediction) -> dict[str, float]:
+        logits = eval_pred.predictions
+        logits = logits[0] if isinstance(logits, tuple) else logits
+        predictions.append(np.asarray(logits).argmax(axis=-1))
+        return compute_metrics(eval_pred, settings=settings, label_map=data.label_map)
+
+    trainer = Trainer(
+        model=_load_model(settings, data.label_map),
+        args=args,
+        data_collator=DataCollatorWithPadding(tokenizer),
+        train_dataset=_features(data.x_train, data.y_train, tokenizer, cfg.max_len),
+        eval_dataset=_features(data.x_val, data.y_val, tokenizer, cfg.max_len),
+        processing_class=tokenizer,
+        compute_metrics=metrics_fn,
+    )
+    cuda = torch.cuda.is_available() and not args.use_cpu
+    if cuda:
+        torch.cuda.reset_peak_memory_stats()
+    start = time.perf_counter()
+    trainer.train()
+    train_seconds = time.perf_counter() - start
+    peak_vram_gb = torch.cuda.max_memory_allocated() / 1e9 if cuda else 0.0
+
+    selection = settings.evaluation.selection_metric
+    evals = [entry for entry in trainer.state.log_history if f"eval_{selection}" in entry]
+    if len(evals) != len(predictions):
+        raise RuntimeError(f"ewaluacji {len(evals)}, predykcji {len(predictions)} — rozjazd")
+    best = max(range(len(evals)), key=lambda i: evals[i][f"eval_{selection}"])
+    result = evaluate(data.y_val, predictions[best], data.label_map)
+    curve_names = sorted({settings.evaluation.primary_metric, selection, "loss"})
+    run_id = log_validation_run(
+        run_name=f"distilbert-v{index}-lr{variant['lr']:g}",
+        params={
+            "model": "distilbert",
+            "model_id": cfg.model_id,
+            "revision": cfg.revision,
+            "variant": index,
+            "lr": args.learning_rate,
+            "epochs": args.num_train_epochs,
+            "batch_size": args.per_device_train_batch_size,
+            "max_len": cfg.max_len,
+            "warmup_ratio": args.warmup_ratio,
+            "weight_decay": args.weight_decay,
+            "seed": args.seed,
+            "bf16": args.bf16,
+            "best_epoch": int(round(evals[best]["epoch"])),
+            "transformers": transformers.__version__,
+            "torch": torch.__version__,
+        },
+        result=result,
+        settings=settings,
+        tags={"model_family": "distilbert", STUDY_TAG: STUDY_NAME},
+        fit_seconds=train_seconds,
+        extra_metrics={"peak_vram_gb": peak_vram_gb},
+        curves={f"val_{name}": [entry[f"eval_{name}"] for entry in evals] for name in curve_names},
+    )
+    epochs = [
+        EpochScore(
+            variant=index,
+            lr=float(variant["lr"]),
+            epoch=int(round(entry["epoch"])),
+            objective=float(entry[f"eval_{selection}"]),
+            checkpoint=output_dir / f"checkpoint-{entry['step']}",
+            run_id=run_id,
+        )
+        for entry in evals
+    ]
+    missing = [score.checkpoint for score in epochs if not score.checkpoint.is_dir()]
+    if missing:
+        raise RuntimeError(f"brak checkpointów epok: {missing} — save_strategy='epoch'?")
+    return DistilbertRun(index, float(variant["lr"]), run_id, epochs, train_seconds, peak_vram_gb)
+
+
+def run_distilbert(data: TrainVal, settings: Settings) -> list[DistilbertRun]:
+    """Wszystkie warianty z configu, po kolei."""
+    variants = settings.models.distilbert.variants
+    return [run_variant(index, data, settings) for index in range(len(variants))]

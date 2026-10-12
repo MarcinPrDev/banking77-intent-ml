@@ -151,7 +151,19 @@ models:
     batch_size: 32
     warmup_ratio: 0.1
     weight_decay: 0.01
-    configs: 3                             # budżet: 2–3 konfiguracje (np. LR x liczba epok)
+    # Budżet: plan (plik 04, README) 2–3 konfiguracje; zmieniony na 5 decyzją autora 12.10.2026,
+    # PRZED wynikami (uzasadnienie autora — README). Warianty nadpisują tylko `lr`; reszta jak
+    # wyżej (Qi 2021). Każda epoka oceniana na walidacji; zwycięzca spośród par (wariant, epoka):
+    # najwyższy evaluation.selection_metric, remis (< tie_tolerance) -> mniej epok.
+    configs: 5
+    variants:
+      - {lr: 2.0e-5}
+      - {lr: 3.0e-5}
+      - {lr: 4.0e-5}
+      - {lr: 5.0e-5}
+      - {lr: 6.0e-5}
+    tie_tolerance: 0.001
+    frozen: null                           # zwycięzca {lr, epoch} — wpisuje autor po wyborze
 
 llm:
   # Stretch A (po domknięciu rdzenia). Jeden model, jeden zamrożony prompt, dobór promptu TYLKO
