@@ -317,6 +317,8 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
       `pygeohash`; dodany extra `serving` (`fastapi`, `uvicorn[standard]`, `httpx` — wymagany przez
       `TestClient`); `optuna` zostaje do decyzji przy HPO w W2 (Optuna czy siatka)
 - [ ] W2 (10–11.10): trzy ścieżki + HPO + pomiary CPU + API z baseline'em
+  - [x] HPO TF-IDF+LR (12.10): Optuna TPE, 16 prób na walidacji, wybór po macro-F1 (remis → mniej
+    cech); zamrożona próba #12 w `models.tfidf_lr.frozen`
 - [ ] W3 (17–18.10): zamrożenie, ocena końcowa, analiza błędów, artefakt, testy, Docker
 - [ ] W4 (24–25.10): kind + workflow CI + test HTTP + odtworzenie z instrukcji
 - [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
@@ -338,6 +340,7 @@ nie do porównań z literaturą; wszystkie liczby z MLflow):
 | Dummy `most_frequent` | — | 1,87% | 0,05% | 8 504 / 1 499 | 0 | < 0,01 s |
 | Dummy `stratified` (seed 42) | — | 1,13% | 1,04% | 8 504 / 1 499 | 0 | < 0,01 s |
 | TF-IDF + LR | W1, przed HPO: wartości domyślne sklearn 1.9 (unigramy, `C` = 1,0, bez wag klas) | 84,39% | 83,89% | 8 504 / 1 499 | 0 (HPO w W2) | 0,50 s |
+| TF-IDF + LR | **zamrożona (HPO W2, próba #12):** znaki `char_wb` (2,4), `min_df` 2, `sublinear_tf`, `C` ≈ 49,7, wagi `balanced` | 89,26% | 89,32% | 8 504 / 1 499 | 16 (Optuna TPE) | 2,95 s |
 | MiniLM + kNN | | do zmierzenia | | | | |
 | DistilBERT | | do zmierzenia | | | | |
 

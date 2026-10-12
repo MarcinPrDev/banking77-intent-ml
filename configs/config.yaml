@@ -106,7 +106,22 @@ models:
         sublinear_tf: [false, true]
         C: {low: 0.1, high: 100.0}           # suggest_float(..., log=True)
         class_weight: [null, balanced]
-    frozen: null                           # zwycięzca HPO {tfidf: ..., logreg: ...} — wpisuje autor
+    # Zamrożona konfiguracja (decyzja autora 12.10.2026): zwycięzca HPO — próba #12, run fdd95ac5
+    # (walidacja: macro-F1 0,8932, accuracy 0,8926; 7 925 cech). Parametry 1:1 z tego runu.
+    frozen:
+      tfidf:
+        ngram_range: [2, 4]
+        min_df: 2
+        sublinear_tf: true
+        token_pattern: '(?u)\b\w\w+\b'     # przy char_wb nieużywany (działa tylko dla analyzer=word)
+        stop_words: null
+        analyzer: char_wb
+      logreg:
+        C: 49.68965019883294
+        l1_ratio: 0.0
+        class_weight: balanced
+        solver: lbfgs
+        max_iter: 100
   minilm_knn:
     model_id: sentence-transformers/all-MiniLM-L6-v2   # Apache-2.0
     # Rewizja = commit `main` na HF Hub w dniu przypięcia (9.10.2026; licencja apache-2.0 wg karty).
