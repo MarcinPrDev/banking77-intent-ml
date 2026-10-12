@@ -55,10 +55,10 @@ def toy_data() -> TrainVal:
 @pytest.fixture
 def tiny(tmp_path, tmp_mlflow_settings, monkeypatch):
     """Malutki tokenizer i model na CPU; rzeczywiste argumenty i metryki projektu."""
-    vocab = tmp_path / "vocab.txt"
-    vocab.write_text("\n".join(_VOCAB), encoding="utf-8")
+    # transformers 5: słownik przez `vocab` (dict); `vocab_file` w konstruktorze jest pomijany
+    vocab = {token: index for index, token in enumerate(_VOCAB)}
     monkeypatch.setattr(
-        distilbert, "_load_tokenizer", lambda settings: BertTokenizerFast(vocab_file=str(vocab))
+        distilbert, "_load_tokenizer", lambda settings: BertTokenizerFast(vocab=vocab)
     )
 
     def load_model(settings, label_map):
