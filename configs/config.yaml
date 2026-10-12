@@ -132,7 +132,12 @@ models:
     k_values: [1, 3, 5, 10]                # "kilka k" — przyjęte bez zmian 12.10 (siatka 4 × 2 = 8 runów)
     weights: [uniform, distance]
     metric: cosine                         # plan W2 §1 pkt 2; MiniLM kończy się modułem Normalize
-    frozen: null                           # zwycięzca siatki {n_neighbors, weights} — wpisuje autor
+    # Zamrożona konfiguracja (decyzja autora 12.10.2026): zwycięzca siatki — run adc7b2a6
+    # (walidacja: macro-F1 0,9127, accuracy 0,9106); remis z k=1 distance (identyczny wynik)
+    # rozstrzygnięty regułą ustaloną przed uruchomieniem: mniejsze k, potem uniform.
+    frozen:
+      n_neighbors: 1
+      weights: uniform
   distilbert:
     model_id: distilbert/distilbert-base-uncased        # Apache-2.0
     # Commit `main` na HF Hub (ostatnia zmiana 6.05.2024; przypięte 9.10.2026; apache-2.0) — ta sama
