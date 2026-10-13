@@ -8,6 +8,8 @@ katalogu, run MLflow; integracyjnie: prawdziwe procesy pomiarowe na malutkim art
 from __future__ import annotations
 
 import importlib.util
+import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -70,7 +72,20 @@ def test_worker_env_limits_threads_and_hides_gpu():
     env = cost.worker_env(3)
 
     assert all(env[name] == "3" for name in cost.THREAD_ENV)
-    assert env["CUDA_VISIBLE_DEVICES"] == ""
+    assert env["CUDA_VISIBLE_DEVICES"] == "-1"
+
+
+def test_worker_env_really_hides_cuda_from_torch():
+    """Regresja 14.10: na Windows `CUDA_VISIBLE_DEVICES=""` nie ukrywało GPU przed torch."""
+    pytest.importorskip("torch")
+    code = "import torch; print(torch.cuda.is_available())"
+
+    completed = subprocess.run(
+        [sys.executable, "-c", code], env=cost.worker_env(1), capture_output=True, text=True,
+        check=True,
+    )
+
+    assert completed.stdout.strip() == "False"
 
 
 def test_directory_bytes_counts_every_file(tmp_path):

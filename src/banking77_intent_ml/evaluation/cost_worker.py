@@ -8,7 +8,7 @@ Na górze tylko biblioteka standardowa: zimny start liczony od importu pakietu o
 kodu modelu, `load` i pierwszą predykcję; start interpretera i odczyt listy zdań są poza
 pomiarem (stałe dla każdej ścieżki). Wątki ustawia środowisko procesu (OMP/MKL/OpenBLAS —
 torch czyta je przy imporcie); po `load` worker woła jeszcze `torch.set_num_threads`
-i zwraca faktyczną liczbę wątków torch oraz to, czy CUDA była widoczna.
+i zwraca faktyczną liczbę wątków torch. Widoczna CUDA = błąd i koniec (pomiar tylko na CPU).
 """
 
 from __future__ import annotations
@@ -41,6 +41,8 @@ def main() -> None:
     predictor = load_predictor(job["model"], load_settings(), directory)
     loaded = time.perf_counter()
     torch_threads, cuda = _torch_state(job["threads"])
+    if cuda:
+        sys.exit("proces pomiarowy widzi CUDA — pomiar ma być wyłącznie na CPU")
 
     if job["mode"] == "cold":
         begin = time.perf_counter()
@@ -60,7 +62,7 @@ def main() -> None:
                 predictor.predict_proba([text])
                 timings.append(time.perf_counter_ns() - begin)
         result = {"timings_ns": timings}
-    print(json.dumps({**result, "torch_threads": torch_threads, "cuda": cuda}))
+    print(json.dumps({**result, "torch_threads": torch_threads}))
 
 
 if __name__ == "__main__":

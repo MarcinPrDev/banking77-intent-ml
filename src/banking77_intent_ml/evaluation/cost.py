@@ -6,9 +6,10 @@ p50/p95 z `numpy.percentile`; zimny start = `cold_runs` nowych procesów na ści
 i max); poziom = predyktor (`predict_proba` na jednym tekście, jak w API), bez HTTP.
 
 Każdy pomiar w osobnym procesie (`evaluation.cost_worker`) ze środowiskiem ustawionym przed
-startem Pythona: OMP/MKL/OpenBLAS = liczba wątków i `CUDA_VISIBLE_DEVICES=""` — tylko CPU, także
-dla enkodera MiniLM. Zdania: `n_texts` losowanych z walidacji seedem `models.seed`, te same dla
-każdej ścieżki i liczby wątków (hash ich id w runie). Rozmiar = cały katalog
+startem Pythona: OMP/MKL/OpenBLAS = liczba wątków i `CUDA_VISIBLE_DEVICES=-1` — tylko CPU, także
+dla enkodera MiniLM (worker kończy się błędem, gdy mimo to widzi CUDA). Zdania: `n_texts`
+losowanych z walidacji seedem `models.seed`, te same dla każdej ścieżki i liczby wątków (hash
+ich id w runie). Rozmiar = cały katalog
 `paths.models_dir/<nazwa>`; dla MiniLM+kNN plus wagi enkodera z cache Hugging Face (przypięta
 rewizja), bez których indeks nie działa. MB = 10^6 B.
 Ograniczenie: po pierwszym uruchomieniu pliki modelu są w cache systemu plików, więc zimny start
@@ -62,7 +63,9 @@ def sample_texts(data: TrainVal, settings: Settings) -> pd.Series:
 
 def worker_env(threads: int) -> dict[str, str]:
     env = {**os.environ, **{name: str(threads) for name in THREAD_ENV}}
-    env["CUDA_VISIBLE_DEVICES"] = ""  # tylko CPU — także enkoder MiniLM
+    # Tylko CPU, także enkoder MiniLM. "-1", nie "": na Windows pusta wartość nie ukrywa GPU
+    # (proces nadal widzi CUDA — sprawdzone 14.10 na tej maszynie).
+    env["CUDA_VISIBLE_DEVICES"] = "-1"
     env["TOKENIZERS_PARALLELISM"] = "false"
     return env
 
@@ -116,8 +119,6 @@ def measure(
         warm_job = {**job, "mode": "warm", "warmup": cfg.warmup, "passes": cfg.passes}
         warm = run_worker(warm_job, threads)
         cold = [run_worker({**job, "mode": "cold"}, threads) for _ in range(cfg.cold_runs)]
-    if any(run["cuda"] for run in [warm, *cold]):
-        raise RuntimeError("proces pomiarowy widział CUDA — pomiar ma być wyłącznie na CPU")
     cold_parts = [
         {key: run[key] for key in ("import_s", "load_s", "first_predict_s")} for run in cold
     ]
