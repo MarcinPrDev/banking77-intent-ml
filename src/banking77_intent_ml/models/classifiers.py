@@ -4,18 +4,19 @@ Zasady dla implementacji (pilnuje ich `tests/test_predictor.py`):
 - hiperparametry wyłącznie z zamrożonej konfiguracji `models.<name>.frozen` (i bazy z configu);
 - torch, transformers i sentence-transformers importuj wewnątrz metod — `models.factory`
   importuje ten moduł, a CI ma tylko extra `dev`;
-- builder z `baselines` importuj dopiero w `fit` — zależy od MLflow, zbędnego przy predykcji;
+- buildery z `baselines` i `knn` importuj dopiero w `fit` — zależą od MLflow;
 - ciężkie modele ładuj przez funkcje infrastruktury wołane przez moduł (`embeddings.encode_texts`,
   nie `from ... import encode_texts`) — test kontraktu podmienia je atrapami, więc działa bez
   pobierania i bez GPU. MiniLM: `features.embeddings.encode_texts`; DistilBERT:
   `models.distilbert._load_tokenizer`, `_load_model`, `training_arguments`;
 - artefakt = katalog (`paths.models_dir/<name>` przy eksporcie); istniejący -> `FileExistsError`.
 
-Kontrakt w `models/predictor.py`; adaptery MiniLM i DistilBERT pozostają do uzupełnienia.
+Kontrakt w `models/predictor.py`; adapter DistilBERT pozostaje do uzupełnienia.
 """
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from contextlib import suppress
 from dataclasses import replace
@@ -26,14 +27,16 @@ from sklearn.exceptions import NotFittedError
 
 from banking77_intent_ml.config import Settings
 from banking77_intent_ml.models.persistence import (
+    METADATA_SUFFIX,
     MODEL_SUFFIX,
+    ModelArtifactError,
     build_metadata,
     load_model,
     save_model,
 )
 from banking77_intent_ml.models.predictor import IntentClassifier
 
-_SKLEARN_ARTIFACT = f"model{MODEL_SUFFIX}"  # TF-IDF+LR: plik modelu w katalogu artefaktu
+_SKLEARN_ARTIFACT = f"model{MODEL_SUFFIX}"  # TF-IDF+LR i MiniLM+kNN: plik estymatora
 
 
 class TfidfLrClassifier(IntentClassifier):
@@ -100,28 +103,82 @@ class TfidfLrClassifier(IntentClassifier):
 class MiniLmKnnClassifier(IntentClassifier):
     """Zamrożone embeddingi MiniLM + kNN (`models.minilm_knn.frozen`).
 
-    TODO(Marcin): fit — `embeddings.encode_texts` + `build_knn` z `frozen`; predict — embedding
-    zapytania w środku (latencja mierzona uczciwie, z ekstrakcją); save/load — indeks kNN to
-    estymator sklearn, więc `persistence`; model i rewizja MiniLM w metadanych.
+    Każda predykcja obejmuje kodowanie tekstów przez `embeddings.encode_texts`.
+    Artefakt to indeks kNN (`model.joblib`) i metadane (`model.json`, `run_id=None`).
+    Wagi enkodera są ładowane przez `embeddings` z przypiętej rewizji; identyfikator
+    i rewizja w metadanych muszą zgadzać się z configiem przy odczycie indeksu.
+    `load` rozgrzewa enkoder przed zwróceniem predyktora, więc błąd ładowania wag
+    przerywa start API, a pierwsze żądanie korzysta już z modelu w pamięci.
     """
 
     name = "minilm_knn"
 
     def fit(self, texts: Sequence[str], labels: Sequence[int]) -> MiniLmKnnClassifier:
-        raise NotImplementedError("W2 pkt 5: MiniLmKnnClassifier.fit — pisze autor")
+        cfg = self.settings.models.minilm_knn
+        if cfg.frozen is None:
+            raise ValueError(
+                "models.minilm_knn.frozen jest puste — najpierw zamrożenie konfiguracji"
+            )
+
+        from banking77_intent_ml.features import embeddings
+        from banking77_intent_ml.models.knn import build_knn
+
+        model = build_knn(cfg.frozen["n_neighbors"], cfg.frozen["weights"], self.settings)
+        model.fit(embeddings.encode_texts(texts, self.settings), labels)
+        self._model = model
+        return self
+
+    def _require_fitted(self) -> None:
+        if not hasattr(self, "_model"):
+            raise NotFittedError("MiniLmKnnClassifier: najpierw wywołaj fit() albo load().")
 
     def predict(self, texts: Sequence[str]) -> np.ndarray:
-        raise NotImplementedError("W2 pkt 5: MiniLmKnnClassifier.predict — pisze autor")
+        return self.predict_proba(texts).argmax(axis=1)
 
     def predict_proba(self, texts: Sequence[str]) -> np.ndarray:
-        raise NotImplementedError("W2 pkt 5: MiniLmKnnClassifier.predict_proba — pisze autor")
+        self._require_fitted()
+        from banking77_intent_ml.features import embeddings
+
+        probabilities = self._model.predict_proba(embeddings.encode_texts(texts, self.settings))
+        scores = np.zeros((probabilities.shape[0], self.settings.dataset.n_classes), dtype=float)
+        scores[:, self._model.classes_] = probabilities
+        return scores
 
     def save(self, directory: Path) -> Path:
-        raise NotImplementedError("W2 pkt 5: MiniLmKnnClassifier.save — pisze autor")
+        self._require_fitted()
+        cfg = self.settings.models.minilm_knn
+        metadata = build_metadata(model_name=self.name, run_id=None, settings=self.settings)
+        metadata.update(model_id=cfg.model_id, revision=cfg.revision)
+        directory.mkdir(parents=True, exist_ok=False)
+        try:
+            save_model(self._model, directory / _SKLEARN_ARTIFACT, metadata=metadata)
+        except BaseException:
+            with suppress(OSError):
+                directory.rmdir()
+            raise
+        return directory
 
     @classmethod
     def load(cls, directory: Path, settings: Settings) -> MiniLmKnnClassifier:
-        raise NotImplementedError("W2 pkt 5: MiniLmKnnClassifier.load — pisze autor")
+        model_path = directory / _SKLEARN_ARTIFACT
+        metadata_path = model_path.with_suffix(METADATA_SUFFIX)
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise ModelArtifactError(f"nie można odczytać metadanych: {metadata_path}") from exc
+        if not isinstance(metadata, dict):
+            raise ModelArtifactError(f"plik metadanych musi zawierać obiekt JSON: {metadata_path}")
+        cfg = settings.models.minilm_knn
+        for field in ("model_id", "revision"):
+            if metadata.get(field) != getattr(cfg, field):
+                raise ModelArtifactError(f"niezgodne {field} enkodera MiniLM z artefaktem")
+        classifier = cls(settings)
+        classifier._model = load_model(model_path, settings=settings)
+        from banking77_intent_ml.features import embeddings
+
+        # Syntetyczny tekst: inicjalizacja enkodera należy do load/startu API.
+        embeddings.encode_texts(["warmup"], settings)
+        return classifier
 
 
 class DistilBertClassifier(IntentClassifier):

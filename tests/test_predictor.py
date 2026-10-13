@@ -30,7 +30,7 @@ from sklearn.feature_extraction.text import HashingVectorizer
 
 from banking77_intent_ml.config import load_settings
 from banking77_intent_ml.features import embeddings
-from banking77_intent_ml.models.classifiers import TfidfLrClassifier
+from banking77_intent_ml.models.classifiers import MiniLmKnnClassifier, TfidfLrClassifier
 from banking77_intent_ml.models.factory import STRATEGIES, build_predictor, load_predictor
 from banking77_intent_ml.models.persistence import ModelArtifactError, load_model
 
@@ -48,13 +48,14 @@ _SPECIAL_TOKENS = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
 # --- Fabryka -------------------------------------------------------------------------------------
 
 
-def test_factory_import_does_not_load_mlflow(tmp_path):
+def test_factory_import_does_not_load_training_or_encoder_libraries(tmp_path):
     # Osobny proces: inne testy mogą już mieć MLflow w sys.modules.
     code = """
 import sys
 import banking77_intent_ml.models.factory
 
-assert "mlflow" not in sys.modules, "import fabryki predyktorów ładuje MLflow"
+for name in ("mlflow", "torch", "transformers", "sentence_transformers"):
+    assert name not in sys.modules, f"import fabryki predyktorów ładuje {name}"
 """
     result = subprocess.run(
         [sys.executable, "-c", code],
@@ -127,6 +128,13 @@ def _fake_minilm(monkeypatch) -> None:
     )
 
 
+@pytest.fixture(params=["tfidf_lr", "minilm_knn"])
+def sklearn_classifier(request, monkeypatch):
+    if request.param == "minilm_knn":
+        _fake_minilm(monkeypatch)
+    return STRATEGIES[request.param]
+
+
 def _tiny_distilbert(monkeypatch, settings):
     """Malutki tokenizer i model na CPU (jak `test_distilbert.py`); 2 epoki, zamrożona 1."""
     pytest.importorskip("transformers")
@@ -175,7 +183,7 @@ def _skip_while_skeleton(name: str):
     try:
         yield
     except NotImplementedError as exc:
-        if name == "tfidf_lr" or "W2 pkt 5" not in str(exc):
+        if name != "distilbert" or "W2 pkt 5" not in str(exc):
             raise
         pytest.skip(f"{name}: adapter jeszcze nie napisany — {exc}")
 
@@ -237,12 +245,12 @@ def test_tfidf_adapter_uses_frozen_params_and_seed_without_mutation(toy_settings
     assert metadata["run_id"] is None  # fit adaptera nie tworzy runu MLflow
 
 
-def test_tfidf_scores_keep_label_ids_when_training_omits_classes(tmp_path):
+def test_sklearn_scores_keep_label_ids_when_training_omits_classes(tmp_path, sklearn_classifier):
     settings = load_settings()
     n_classes = settings.dataset.n_classes
     class_ids = [1, n_classes - 1]
     labels = [class_ids[label] for label in _TRAIN_LABELS[:6]]
-    predictor = TfidfLrClassifier(settings).fit(_TRAIN_TEXTS[:6], labels)
+    predictor = sklearn_classifier(settings).fit(_TRAIN_TEXTS[:6], labels)
 
     scores = predictor.predict_proba(_QUERIES)
 
@@ -254,17 +262,19 @@ def test_tfidf_scores_keep_label_ids_when_training_omits_classes(tmp_path):
     assert set(predictor.predict(_QUERIES)) <= set(class_ids)
 
     directory = predictor.save(tmp_path / "sparse-classes")
-    # Odczyt korzysta z zapisanego pipeline'u, nawet gdy nie ma konfiguracji do ponownego fitu.
-    without_frozen = replace(settings.models.tfidf_lr, frozen=None)
-    settings = replace(settings, models=replace(settings.models, tfidf_lr=without_frozen))
-    loaded = TfidfLrClassifier.load(directory, settings)
+    # Odczyt korzysta z artefaktu, nawet gdy nie ma konfiguracji do ponownego fitu.
+    without_frozen = replace(getattr(settings.models, predictor.name), frozen=None)
+    settings = replace(
+        settings, models=replace(settings.models, **{predictor.name: without_frozen})
+    )
+    loaded = sklearn_classifier.load(directory, settings)
     assert loaded is not predictor
     np.testing.assert_array_equal(loaded.predict_proba(_QUERIES), scores)
     np.testing.assert_array_equal(loaded.predict(_QUERIES), predictor.predict(_QUERIES))
 
 
-def test_tfidf_save_rejects_existing_empty_directory(toy_settings):
-    predictor = TfidfLrClassifier(toy_settings).fit(_TRAIN_TEXTS, _TRAIN_LABELS)
+def test_sklearn_save_rejects_existing_empty_directory(toy_settings, sklearn_classifier):
+    predictor = sklearn_classifier(toy_settings).fit(_TRAIN_TEXTS, _TRAIN_LABELS)
     directory = toy_settings.paths.models_dir / "empty"
     directory.mkdir(parents=True)
 
@@ -275,8 +285,10 @@ def test_tfidf_save_rejects_existing_empty_directory(toy_settings):
 
 
 @pytest.mark.parametrize("error_type", [OSError, PicklingError])
-def test_tfidf_failed_save_allows_retry(toy_settings, monkeypatch, error_type):
-    predictor = TfidfLrClassifier(toy_settings).fit(_TRAIN_TEXTS, _TRAIN_LABELS)
+def test_sklearn_failed_save_allows_retry(
+    toy_settings, monkeypatch, error_type, sklearn_classifier,
+):
+    predictor = sklearn_classifier(toy_settings).fit(_TRAIN_TEXTS, _TRAIN_LABELS)
     directory = toy_settings.paths.models_dir / "retry"
     error = error_type("przerwany zapis modelu")
 
@@ -292,12 +304,14 @@ def test_tfidf_failed_save_allows_retry(toy_settings, monkeypatch, error_type):
     assert caught.value is error
     assert not directory.exists()
     assert predictor.save(directory) == directory
-    loaded = TfidfLrClassifier.load(directory, toy_settings)
+    loaded = sklearn_classifier.load(directory, toy_settings)
     np.testing.assert_array_equal(loaded.predict_proba(_QUERIES), predictor.predict_proba(_QUERIES))
 
 
-def test_tfidf_failed_save_preserves_other_files_and_original_error(toy_settings, monkeypatch):
-    predictor = TfidfLrClassifier(toy_settings).fit(_TRAIN_TEXTS, _TRAIN_LABELS)
+def test_sklearn_failed_save_preserves_other_files_and_original_error(
+    toy_settings, monkeypatch, sklearn_classifier,
+):
+    predictor = sklearn_classifier(toy_settings).fit(_TRAIN_TEXTS, _TRAIN_LABELS)
     directory = toy_settings.paths.models_dir / "nonempty"
     other_file = directory / "other.txt"
     error = OSError("przerwany zapis modelu")
@@ -316,8 +330,8 @@ def test_tfidf_failed_save_preserves_other_files_and_original_error(toy_settings
 
 
 @pytest.mark.parametrize("method", ["predict", "predict_proba", "save"])
-def test_tfidf_unfitted_reports_required_fit_or_load(toy_settings, method):
-    predictor = TfidfLrClassifier(toy_settings)
+def test_sklearn_unfitted_reports_required_fit_or_load(toy_settings, method, sklearn_classifier):
+    predictor = sklearn_classifier(toy_settings)
     directory = toy_settings.paths.models_dir / "unfitted"
     argument = directory if method == "save" else _QUERIES
 
@@ -328,8 +342,8 @@ def test_tfidf_unfitted_reports_required_fit_or_load(toy_settings, method):
 
 
 @pytest.mark.parametrize("field", ["label_map_sha256", "sklearn_version"])
-def test_tfidf_load_checks_artifact_metadata(toy_settings, field):
-    predictor = TfidfLrClassifier(toy_settings).fit(_TRAIN_TEXTS, _TRAIN_LABELS)
+def test_sklearn_load_checks_artifact_metadata(toy_settings, field, sklearn_classifier):
+    predictor = sklearn_classifier(toy_settings).fit(_TRAIN_TEXTS, _TRAIN_LABELS)
     directory = predictor.save(toy_settings.paths.models_dir / "invalid-metadata")
     metadata_path, = directory.glob("*.json")
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -337,4 +351,129 @@ def test_tfidf_load_checks_artifact_metadata(toy_settings, field):
     metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
 
     with pytest.raises(ModelArtifactError):
-        TfidfLrClassifier.load(directory, toy_settings)
+        sklearn_classifier.load(directory, toy_settings)
+
+
+@pytest.mark.parametrize(
+    "n_neighbors, weights, metric", [(1, "uniform", "cosine"), (3, "distance", "euclidean")],
+)
+def test_minilm_uses_frozen_params_and_encodes_each_request(
+    toy_settings, monkeypatch, n_neighbors, weights, metric,
+):
+    cfg = replace(
+        toy_settings.models.minilm_knn, metric=metric, k_values=(7,), weights=("other",),
+        frozen={"n_neighbors": n_neighbors, "weights": weights},
+    )
+    settings = replace(toy_settings, models=replace(toy_settings.models, minilm_knn=cfg))
+    original = deepcopy(cfg)
+    vectorizer = HashingVectorizer(n_features=64, alternate_sign=False)
+    calls = []
+
+    def encode(texts, received_settings):
+        calls.append((list(texts), received_settings))
+        return vectorizer.transform(list(texts)).toarray().astype(np.float32)
+
+    monkeypatch.setattr(embeddings, "encode_texts", encode)
+    predictor = MiniLmKnnClassifier(settings)
+    assert predictor.fit(_TRAIN_TEXTS, _TRAIN_LABELS) is predictor
+    queries = [*_QUERIES, "card arrived late"]
+    scores = predictor.predict_proba(queries)
+    predicted = predictor.predict(queries)
+    assert [texts for texts, _ in calls] == [_TRAIN_TEXTS, queries, queries]
+    assert all(received is settings for _, received in calls)
+    assert cfg == original
+
+    directory = predictor.save(settings.paths.models_dir / "minilm")
+    model_path, = directory.glob("*.joblib")
+    model = load_model(model_path, settings=settings)
+    assert model.n_neighbors == n_neighbors
+    assert model.weights == weights
+    assert model.metric == metric
+    expected = model.predict_proba(vectorizer.transform(queries).toarray().astype(np.float32))
+    np.testing.assert_array_equal(scores, expected)
+    np.testing.assert_array_equal(predicted, expected.argmax(axis=1))
+    metadata = json.loads(model_path.with_suffix(".json").read_text(encoding="utf-8"))
+    assert metadata["model_name"] == "minilm_knn"
+    assert metadata["run_id"] is None
+    assert metadata["model_id"] == cfg.model_id
+    assert metadata["revision"] == cfg.revision
+
+
+def test_minilm_fit_requires_frozen_before_encoding(toy_settings, monkeypatch):
+    cfg = replace(toy_settings.models.minilm_knn, frozen=None)
+    settings = replace(toy_settings, models=replace(toy_settings.models, minilm_knn=cfg))
+
+    def unexpected_encode(*args, **kwargs):
+        pytest.fail("Nie koduj tekstów bez zamrożonej konfiguracji")
+
+    monkeypatch.setattr(embeddings, "encode_texts", unexpected_encode)
+    with pytest.raises(ValueError, match="frozen"):
+        MiniLmKnnClassifier(settings).fit(_TRAIN_TEXTS, _TRAIN_LABELS)
+
+
+def test_minilm_load_warms_encoder_before_returning(toy_settings, monkeypatch):
+    _fake_minilm(monkeypatch)
+    predictor = MiniLmKnnClassifier(toy_settings).fit(_TRAIN_TEXTS, _TRAIN_LABELS)
+    expected = predictor.predict_proba(_QUERIES)
+    directory = predictor.save(toy_settings.paths.models_dir / "warmup")
+    encode = embeddings.encode_texts
+    calls = []
+
+    def record_encode(texts, settings):
+        calls.append((list(texts), settings))
+        return encode(texts, settings)
+
+    monkeypatch.setattr(embeddings, "encode_texts", record_encode)
+    loaded = MiniLmKnnClassifier.load(directory, toy_settings)
+
+    # Enkoder gotowy już po load; nie trzeba pierwszego żądania /predict.
+    assert len(calls) == 1
+    warmup_texts, settings = calls[0]
+    assert len(warmup_texts) == 1 and warmup_texts[0].strip()
+    assert settings is toy_settings
+    np.testing.assert_array_equal(loaded.predict_proba(_QUERIES), expected)
+
+
+def test_minilm_load_propagates_encoder_failure(toy_settings, monkeypatch):
+    _fake_minilm(monkeypatch)
+    predictor = MiniLmKnnClassifier(toy_settings).fit(_TRAIN_TEXTS, _TRAIN_LABELS)
+    directory = predictor.save(toy_settings.paths.models_dir / "failed-warmup")
+    error = OSError("brak wag enkodera")
+
+    def broken_encode(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(embeddings, "encode_texts", broken_encode)
+    with pytest.raises(OSError, match="brak wag enkodera") as caught:
+        MiniLmKnnClassifier.load(directory, toy_settings)
+    assert caught.value is error
+
+
+@pytest.mark.parametrize("field", ["model_id", "revision"])
+@pytest.mark.parametrize("mismatch", ["settings", "missing_metadata"])
+def test_minilm_load_rejects_incompatible_encoder_before_unpickling(
+    toy_settings, monkeypatch, field, mismatch,
+):
+    _fake_minilm(monkeypatch)
+    predictor = MiniLmKnnClassifier(toy_settings).fit(_TRAIN_TEXTS, _TRAIN_LABELS)
+    directory = predictor.save(toy_settings.paths.models_dir / "encoder")
+    settings = toy_settings
+    if mismatch == "settings":
+        cfg = replace(settings.models.minilm_knn, **{field: "inny-enkoder"})
+        settings = replace(settings, models=replace(settings.models, minilm_knn=cfg))
+    else:
+        metadata_path, = directory.glob("*.json")
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        del metadata[field]
+        metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+
+    def unexpected_load(*args, **kwargs):
+        pytest.fail("Nie wczytuj indeksu kNN z niezgodnym enkoderem")
+
+    def unexpected_encode(*args, **kwargs):
+        pytest.fail("Nie rozgrzewaj enkodera przed walidacją metadanych")
+
+    monkeypatch.setattr(joblib, "load", unexpected_load)
+    monkeypatch.setattr(embeddings, "encode_texts", unexpected_encode)
+    with pytest.raises(ModelArtifactError, match=field):
+        MiniLmKnnClassifier.load(directory, settings)
