@@ -60,6 +60,14 @@ evaluation:
   # To kontrola wrażliwości, nie nowy benchmark — nie porównywać z publikacjami na 3080.
   clean_test_subset_path: dane/splits/test_clean_ids.json
   n_clean_test_expected: 3055              # 3080 - 25 tekstów z odpowiednikiem w train (audyt 30.09)
+  # Pomiary kosztu CPU (W2 N2, decyzje autora 14.10.2026): latencja batch=1 przez wspólny interfejs
+  # predyktora (`predict_proba` na jednym tekście, bez HTTP), tylko CPU (CUDA_VISIBLE_DEVICES="").
+  cost:
+    threads: [1, 8]                        # torch.set_num_threads + OMP/MKL/OpenBLAS; 8 = rdzenie fizyczne tej maszyny
+    n_texts: 200                           # zdania z walidacji losowane seedem models.seed — te same dla każdej ścieżki
+    passes: 3                              # latencja rozgrzana: 200 × 3 = 600 pomiarów; p50/p95 z numpy.percentile
+    warmup: 20                             # predykcje rozgrzewki przed pomiarem
+    cold_runs: 10                          # zimny start: nowe procesy na ścieżkę (import + load + 1. predykcja); mediana i max
 
 models:
   seed: 42                                 # seed treningu (osobny od split.random_state — ten sam numer, inna rola)

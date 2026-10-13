@@ -77,12 +77,22 @@ class SplitConfig:
 
 
 @dataclass(frozen=True)
+class CostConfig:
+    threads: tuple[int, ...]  # liczby wątków CPU, każda mierzona osobno
+    n_texts: int  # zdania z walidacji (seed `models.seed`)
+    passes: int  # przebiegi po zdaniach w pomiarze latencji rozgrzanej
+    warmup: int  # predykcje rozgrzewki przed pomiarem
+    cold_runs: int  # nowe procesy na ścieżkę w pomiarze zimnego startu
+
+
+@dataclass(frozen=True)
 class EvaluationConfig:
     primary_metric: str
     selection_metric: str
     secondary_metrics: tuple[str, ...]
     clean_test_subset_path: Path  # allow-testset
     n_clean_test_expected: int
+    cost: CostConfig
 
 
 @dataclass(frozen=True)
@@ -303,6 +313,13 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
             secondary_metrics=tuple(ev["secondary_metrics"]),
             clean_test_subset_path=_abs(ev["clean_test_subset_path"]),  # allow-testset
             n_clean_test_expected=int(ev["n_clean_test_expected"]),
+            cost=CostConfig(
+                threads=tuple(int(threads) for threads in ev["cost"]["threads"]),
+                n_texts=int(ev["cost"]["n_texts"]),
+                passes=int(ev["cost"]["passes"]),
+                warmup=int(ev["cost"]["warmup"]),
+                cold_runs=int(ev["cost"]["cold_runs"]),
+            ),
         ),
         models=ModelsConfig(
             seed=int(md["seed"]),
