@@ -7,8 +7,7 @@ odczyt daje identyczne predykcje, drugi zapis nic nie nadpisuje. Ciężkie model
 (bez pobierania, CPU): MiniLM — `embeddings.encode_texts` (HashingVectorizer), DistilBERT —
 malutki model jak w `test_distilbert.py` (w CI, bez torch, pomijany).
 
-Adapter, który rzuca jeszcze NotImplementedError szkieletu, jest pomijany — jego test włącza
-się sam, gdy autor go napisze (`_skip_while_skeleton` do usunięcia razem z ostatnim szkieletem).
+Wszystkie trzy adaptery podlegają temu samemu kontraktowi; pomijamy tylko brak zależności.
 """
 
 from __future__ import annotations
@@ -16,9 +15,9 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import replace
+from math import ceil
 from pickle import PicklingError
 
 import joblib
@@ -30,9 +29,13 @@ from sklearn.feature_extraction.text import HashingVectorizer
 
 from banking77_intent_ml.config import load_settings
 from banking77_intent_ml.features import embeddings
-from banking77_intent_ml.models.classifiers import MiniLmKnnClassifier, TfidfLrClassifier
+from banking77_intent_ml.models.classifiers import (
+    DistilBertClassifier,
+    MiniLmKnnClassifier,
+    TfidfLrClassifier,
+)
 from banking77_intent_ml.models.factory import STRATEGIES, build_predictor, load_predictor
-from banking77_intent_ml.models.persistence import ModelArtifactError, load_model
+from banking77_intent_ml.models.persistence import ModelArtifactError, build_metadata, load_model
 
 _LABEL_MAP = {"card_arrival": 0, "exchange_rate": 1, "top_up_failed": 2}
 _TRAIN_TEXTS = [
@@ -178,16 +181,6 @@ def _tiny_distilbert(monkeypatch, settings):
     return replace(settings, models=replace(settings.models, distilbert=cfg))
 
 
-@contextmanager
-def _skip_while_skeleton(name: str):
-    try:
-        yield
-    except NotImplementedError as exc:
-        if name != "distilbert" or "W2 pkt 5" not in str(exc):
-            raise
-        pytest.skip(f"{name}: adapter jeszcze nie napisany — {exc}")
-
-
 @pytest.mark.parametrize("name", sorted(STRATEGIES))
 def test_strategy_honours_contract(name, toy_settings, monkeypatch):
     settings = toy_settings
@@ -199,30 +192,29 @@ def test_strategy_honours_contract(name, toy_settings, monkeypatch):
     x_train = pd.Series(_TRAIN_TEXTS, index=index)
     y_train = pd.Series(_TRAIN_LABELS, index=index)
 
-    with _skip_while_skeleton(name):
-        predictor = build_predictor(name, settings)
-        assert predictor.fit(x_train, y_train) is predictor
+    predictor = build_predictor(name, settings)
+    assert predictor.fit(x_train, y_train) is predictor
 
-        predicted = predictor.predict(_QUERIES)
-        scores = predictor.predict_proba(_QUERIES)
-        assert isinstance(predicted, np.ndarray)
-        assert predicted.shape == (len(_QUERIES),)
-        assert np.issubdtype(predicted.dtype, np.integer)
-        assert set(predicted.tolist()) <= set(_LABEL_MAP.values())
-        assert scores.shape == (len(_QUERIES), len(_LABEL_MAP))
-        assert np.issubdtype(scores.dtype, np.floating)
-        np.testing.assert_array_equal(predicted, scores.argmax(axis=1))
-        assert predictor.predict(_QUERIES[:1]).shape == (1,)  # batch=1 jak w API
+    predicted = predictor.predict(_QUERIES)
+    scores = predictor.predict_proba(_QUERIES)
+    assert isinstance(predicted, np.ndarray)
+    assert predicted.shape == (len(_QUERIES),)
+    assert np.issubdtype(predicted.dtype, np.integer)
+    assert set(predicted.tolist()) <= set(_LABEL_MAP.values())
+    assert scores.shape == (len(_QUERIES), len(_LABEL_MAP))
+    assert np.issubdtype(scores.dtype, np.floating)
+    np.testing.assert_array_equal(predicted, scores.argmax(axis=1))
+    assert predictor.predict(_QUERIES[:1]).shape == (1,)  # batch=1 jak w API
 
-        directory = settings.paths.models_dir / name
-        assert predictor.save(directory) == directory
-        with pytest.raises(FileExistsError):
-            predictor.save(directory)
+    directory = settings.paths.models_dir / name
+    assert predictor.save(directory) == directory
+    with pytest.raises(FileExistsError):
+        predictor.save(directory)
 
-        loaded = load_predictor(name, settings)  # domyślnie paths.models_dir/<name>
-        assert type(loaded) is type(predictor)
-        np.testing.assert_array_equal(loaded.predict(_QUERIES), predicted)
-        np.testing.assert_allclose(loaded.predict_proba(_QUERIES), scores, rtol=0, atol=1e-6)
+    loaded = load_predictor(name, settings)  # domyślnie paths.models_dir/<name>
+    assert type(loaded) is type(predictor)
+    np.testing.assert_array_equal(loaded.predict(_QUERIES), predicted)
+    np.testing.assert_allclose(loaded.predict_proba(_QUERIES), scores, rtol=0, atol=1e-6)
 
 
 def test_tfidf_adapter_uses_frozen_params_and_seed_without_mutation(toy_settings):
@@ -477,3 +469,194 @@ def test_minilm_load_rejects_incompatible_encoder_before_unpickling(
     monkeypatch.setattr(embeddings, "encode_texts", unexpected_encode)
     with pytest.raises(ModelArtifactError, match=field):
         MiniLmKnnClassifier.load(directory, settings)
+
+
+@pytest.fixture
+def tiny_distilbert_settings(toy_settings, monkeypatch):
+    return _tiny_distilbert(monkeypatch, toy_settings)
+
+
+@pytest.fixture
+def native_distilbert_artifact(tiny_distilbert_settings):
+    """Format zamrożonego checkpointu: HF + metadata.json, bez adapterowego save()."""
+    from banking77_intent_ml.models import distilbert
+
+    settings = tiny_distilbert_settings
+    directory = settings.paths.models_dir / "distilbert"
+    model = distilbert._load_model(settings, _LABEL_MAP)
+    tokenizer = distilbert._load_tokenizer(settings)
+    model.save_pretrained(directory)
+    tokenizer.save_pretrained(directory)
+    metadata = build_metadata(model_name="distilbert", run_id="frozen-run", settings=settings)
+    metadata.update(
+        model_id=settings.models.distilbert.model_id,
+        revision=settings.models.distilbert.revision,
+        **settings.models.distilbert.frozen,
+    )
+    (directory / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+    return directory, settings, model, tokenizer
+
+
+@pytest.mark.parametrize("epochs, stop_epoch", [(5, 4), (3, 1)])
+def test_distilbert_fit_preserves_full_schedule_and_stops_at_frozen_epoch(
+    tiny_distilbert_settings, monkeypatch, epochs, stop_epoch,
+):
+    import transformers
+
+    settings = tiny_distilbert_settings
+    cfg = replace(
+        settings.models.distilbert, epochs=epochs, frozen={"lr": 2e-3, "epoch": stop_epoch},
+    )
+    settings = replace(settings, models=replace(settings.models, distilbert=cfg))
+    original = deepcopy(cfg)
+    trainers = []
+
+    class RecordingTrainer(transformers.Trainer):
+        def train(self, *args, **kwargs):
+            result = super().train(*args, **kwargs)
+            trainers.append(self)
+            return result
+
+    monkeypatch.setattr(transformers, "Trainer", RecordingTrainer)
+    predictor = DistilBertClassifier(settings)
+    assert predictor.fit(_TRAIN_TEXTS, _TRAIN_LABELS) is predictor
+
+    trainer, = trainers
+    steps_per_epoch = ceil(len(_TRAIN_TEXTS) / cfg.batch_size)
+    assert trainer.args.learning_rate == cfg.frozen["lr"]
+    assert trainer.args.seed == settings.models.seed
+    assert trainer.args.num_train_epochs == epochs
+    assert trainer.state.max_steps == epochs * steps_per_epoch
+    assert trainer.state.global_step == stop_epoch * steps_per_epoch
+    assert trainer.state.epoch == stop_epoch
+    assert trainer.lr_scheduler.get_last_lr()[0] > 0  # harmonogram trwa dłużej niż trening
+    assert trainer.eval_dataset is None
+    assert not any(key.startswith("eval_") for row in trainer.state.log_history for key in row)
+    assert cfg == original
+
+
+def test_distilbert_loads_native_artifact_and_preserves_metadata(native_distilbert_artifact):
+    import torch
+
+    directory, settings, model, tokenizer = native_distilbert_artifact
+    cfg = replace(settings.models.distilbert, frozen=None)
+    settings = replace(settings, models=replace(settings.models, distilbert=cfg))
+    model.eval()
+    inputs = tokenizer(
+        _QUERIES, padding=True, truncation=True, max_length=cfg.max_len,
+        return_token_type_ids=False, return_tensors="pt",
+    )
+    with torch.inference_mode():
+        expected = model(**inputs).logits.softmax(dim=-1).numpy()
+
+    loaded = DistilBertClassifier.load(directory, settings)
+    np.testing.assert_allclose(loaded.predict_proba(_QUERIES), expected, rtol=0, atol=1e-6)
+    exported = loaded.save(settings.paths.models_dir / "exported")
+    metadata = json.loads((exported / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["run_id"] == "frozen-run"
+    assert metadata["max_len"] == cfg.max_len
+    assert (exported / "model.safetensors").is_file()
+    assert (exported / "tokenizer_config.json").is_file()
+    assert not (exported / "optimizer.pt").exists()
+
+    changed_cfg = replace(cfg, max_len=4)
+    changed_settings = replace(settings, models=replace(settings.models, distilbert=changed_cfg))
+    restored = DistilBertClassifier.load(exported, changed_settings)
+    long_query = ["card " * (cfg.max_len * 2)]
+    np.testing.assert_array_equal(
+        restored.predict_proba(long_query), loaded.predict_proba(long_query)
+    )
+
+
+def test_distilbert_predict_uses_eval_softmax_and_bounded_batches(native_distilbert_artifact):
+    import torch
+
+    directory, settings, _, _ = native_distilbert_artifact
+    predictor = DistilBertClassifier.load(directory, settings)
+    predictor._model.train()  # predict_proba musi sam wyłączyć dropout
+    outputs = []
+
+    def record_forward(model, args, kwargs, output):
+        assert not model.training
+        assert not torch.is_grad_enabled()
+        assert kwargs["input_ids"].shape[0] <= settings.models.distilbert.batch_size
+        assert kwargs["input_ids"].shape[1] <= settings.models.distilbert.max_len
+        outputs.append(output.logits.softmax(dim=-1).cpu().numpy())
+
+    queries = ["card " * 40, *_QUERIES] * 3
+    with predictor._model.register_forward_hook(record_forward, with_kwargs=True):
+        scores = predictor.predict_proba(queries)
+    assert len(outputs) == ceil(len(queries) / settings.models.distilbert.batch_size)
+    np.testing.assert_array_equal(scores, np.concatenate(outputs))
+    np.testing.assert_allclose(scores.sum(axis=1), 1)
+    np.testing.assert_array_equal(predictor.predict_proba(queries), scores)
+    assert predictor.predict_proba([]).shape == (0, len(_LABEL_MAP))
+
+
+@pytest.mark.parametrize("damage", ["missing", "invalid_json", "label_hash", "model_labels"])
+def test_distilbert_load_rejects_invalid_artifact(native_distilbert_artifact, damage):
+    directory, settings, _, _ = native_distilbert_artifact
+    path = directory / "metadata.json"
+    if damage == "missing":
+        path.unlink()
+    elif damage == "invalid_json":
+        path.write_text("{", encoding="utf-8")
+    elif damage == "label_hash":
+        metadata = json.loads(path.read_text(encoding="utf-8"))
+        metadata["label_map_sha256"] = "niezgodne"
+        path.write_text(json.dumps(metadata), encoding="utf-8")
+    else:
+        path = directory / "config.json"
+        config = json.loads(path.read_text(encoding="utf-8"))
+        config["id2label"]["0"] = "niezgodna-klasa"
+        path.write_text(json.dumps(config), encoding="utf-8")
+    with pytest.raises(ModelArtifactError):
+        DistilBertClassifier.load(directory, settings)
+
+
+def test_distilbert_save_rejects_empty_existing_directory(native_distilbert_artifact):
+    directory, settings, _, _ = native_distilbert_artifact
+    predictor = DistilBertClassifier.load(directory, settings)
+    target = directory.parent / "existing"
+    target.mkdir()
+    with pytest.raises(FileExistsError):
+        predictor.save(target)
+    assert list(target.iterdir()) == []
+
+
+@pytest.mark.parametrize("stage", ["_model", "_tokenizer"])
+def test_distilbert_failed_save_allows_retry(native_distilbert_artifact, monkeypatch, stage):
+    directory, settings, _, _ = native_distilbert_artifact
+    predictor = DistilBertClassifier.load(directory, settings)
+    target = directory.parent / "retry"
+    error = OSError("przerwany zapis artefaktu HF")
+
+    def broken_save(path):
+        (path / "partial.json").write_text("{", encoding="utf-8")
+        raise error
+
+    with monkeypatch.context() as patch:
+        patch.setattr(getattr(predictor, stage), "save_pretrained", broken_save)
+        with pytest.raises(OSError, match="przerwany zapis") as caught:
+            predictor.save(target)
+    assert caught.value is error
+    assert not target.exists()
+    assert predictor.save(target) == target
+    restored = DistilBertClassifier.load(target, settings)
+    np.testing.assert_array_equal(restored.predict(_QUERIES), predictor.predict(_QUERIES))
+
+
+@pytest.mark.parametrize("method", ["predict", "predict_proba", "save"])
+def test_distilbert_unfitted_reports_required_fit_or_load(toy_settings, method):
+    predictor = DistilBertClassifier(toy_settings)
+    argument = toy_settings.paths.models_dir / "unfitted" if method == "save" else _QUERIES
+    with pytest.raises(NotFittedError, match=r"fit\(\).*load\(\)"):
+        getattr(predictor, method)(argument)
+
+
+@pytest.mark.parametrize("frozen", [None, {"lr": 1e-3, "epoch": 0}, {"lr": 1e-3, "epoch": 6}])
+def test_distilbert_fit_requires_valid_frozen_epoch(toy_settings, frozen):
+    cfg = replace(toy_settings.models.distilbert, epochs=5, frozen=frozen)
+    settings = replace(toy_settings, models=replace(toy_settings.models, distilbert=cfg))
+    with pytest.raises(ValueError, match="frozen"):
+        DistilBertClassifier(settings).fit(_TRAIN_TEXTS, _TRAIN_LABELS)

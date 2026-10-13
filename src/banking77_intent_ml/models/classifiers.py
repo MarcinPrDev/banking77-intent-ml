@@ -11,7 +11,7 @@ Zasady dla implementacji (pilnuje ich `tests/test_predictor.py`):
   `models.distilbert._load_tokenizer`, `_load_model`, `training_arguments`;
 - artefakt = katalog (`paths.models_dir/<name>` przy eksporcie); istniejący -> `FileExistsError`.
 
-Kontrakt w `models/predictor.py`; adapter DistilBERT pozostaje do uzupełnienia.
+Kontrakt wszystkich adapterów w `models/predictor.py`.
 """
 
 from __future__ import annotations
@@ -21,22 +21,26 @@ from collections.abc import Sequence
 from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import numpy as np
 from sklearn.exceptions import NotFittedError
 
 from banking77_intent_ml.config import Settings
+from banking77_intent_ml.data.labels import LabelMap
 from banking77_intent_ml.models.persistence import (
     METADATA_SUFFIX,
     MODEL_SUFFIX,
     ModelArtifactError,
     build_metadata,
+    label_map_sha256,
     load_model,
     save_model,
 )
 from banking77_intent_ml.models.predictor import IntentClassifier
 
 _SKLEARN_ARTIFACT = f"model{MODEL_SUFFIX}"  # TF-IDF+LR i MiniLM+kNN: plik estymatora
+_DISTILBERT_METADATA = "metadata.json"
 
 
 class TfidfLrClassifier(IntentClassifier):
@@ -184,26 +188,139 @@ class MiniLmKnnClassifier(IntentClassifier):
 class DistilBertClassifier(IntentClassifier):
     """DistilBERT, zamrożony wariant i epoka (`models.distilbert.frozen`).
 
-    TODO(Marcin): fit — Trainer z LR z `frozen`, harmonogram na `epochs` z configu i zatrzymanie
-    po `frozen.epoch` (tak powstał zamrożony checkpoint); predict/predict_proba — logity
-    i softmax w trybie `eval()`; save/load — `save_pretrained` / `from_pretrained` +
-    `metadata.json`, format jak `models/distilbert/` z zamrożenia 13.10 (ten artefakt się wczyta).
+    Scheduler obejmuje `epochs` z configu; callback zatrzymuje fit po `frozen.epoch`.
+    Adapter uczy wyłącznie na podanych danych, bez ewaluacji i wyboru checkpointu.
+    Artefakt HF zawiera wagi, tokenizer i `metadata.json`; odczyt lokalny na CPU sprawdza
+    hash i kolejność klas. Starszy artefakt bez `max_len` używa limitu z configu.
     """
 
     name = "distilbert"
 
     def fit(self, texts: Sequence[str], labels: Sequence[int]) -> DistilBertClassifier:
-        raise NotImplementedError("W2 pkt 5: DistilBertClassifier.fit — pisze autor")
+        cfg = self.settings.models.distilbert
+        if cfg.frozen is None:
+            raise ValueError(
+                "models.distilbert.frozen jest puste — najpierw zamrożenie konfiguracji"
+            )
+        epoch = cfg.frozen["epoch"]
+        if not isinstance(epoch, int) or not 1 <= epoch <= cfg.epochs:
+            raise ValueError("models.distilbert.frozen.epoch musi być w zakresie 1..epochs")
+
+        import pandas as pd
+        import torch
+        import transformers
+        from transformers import DataCollatorWithPadding, Trainer, TrainerCallback, set_seed
+
+        from banking77_intent_ml.models import distilbert
+
+        class StopAtFrozenEpoch(TrainerCallback):
+            def on_epoch_end(self, args, state, control, **kwargs):
+                if state.epoch >= epoch:
+                    control.should_training_stop = True
+                return control
+
+        set_seed(self.settings.models.seed)
+        label_map = dict(LabelMap.from_settings(self.settings).name_to_id)
+        tokenizer = distilbert._load_tokenizer(self.settings)
+        with TemporaryDirectory(prefix="distilbert-fit-") as temporary:
+            args = replace(
+                distilbert.training_arguments(cfg.frozen, self.settings, Path(temporary)),
+                eval_strategy="no", save_strategy="no",
+            )
+            trainer = Trainer(
+                model=distilbert._load_model(self.settings, label_map),
+                args=args,
+                data_collator=DataCollatorWithPadding(tokenizer),
+                train_dataset=distilbert._features(
+                    pd.Series(list(texts)), pd.Series(list(labels)), tokenizer, cfg.max_len,
+                ),
+                processing_class=tokenizer,
+                callbacks=[StopAtFrozenEpoch()],
+            )
+            trainer.train()
+        self._model = trainer.model.eval()
+        self._tokenizer = tokenizer
+        self._max_len = cfg.max_len
+        self._metadata = build_metadata(model_name=self.name, run_id=None, settings=self.settings)
+        self._metadata.update(
+            model_id=cfg.model_id, revision=cfg.revision, max_len=cfg.max_len,
+            lr=cfg.frozen["lr"], epoch=epoch, epochs=cfg.epochs, seed=self.settings.models.seed,
+            torch_version=torch.__version__, transformers_version=transformers.__version__,
+        )
+        return self
+
+    def _require_fitted(self) -> None:
+        if not hasattr(self, "_model"):
+            raise NotFittedError("DistilBertClassifier: najpierw wywołaj fit() albo load().")
 
     def predict(self, texts: Sequence[str]) -> np.ndarray:
-        raise NotImplementedError("W2 pkt 5: DistilBertClassifier.predict — pisze autor")
+        return self.predict_proba(texts).argmax(axis=1)
 
     def predict_proba(self, texts: Sequence[str]) -> np.ndarray:
-        raise NotImplementedError("W2 pkt 5: DistilBertClassifier.predict_proba — pisze autor")
+        self._require_fitted()
+        import torch
+
+        texts = list(texts)
+        self._model.eval()
+        scores = []
+        batch_size = self.settings.models.distilbert.batch_size
+        with torch.inference_mode():
+            for start in range(0, len(texts), batch_size):
+                inputs = self._tokenizer(
+                    texts[start:start + batch_size], padding=True, truncation=True,
+                    max_length=self._max_len, return_token_type_ids=False, return_tensors="pt",
+                ).to(self._model.device)
+                logits = self._model(**inputs).logits
+                scores.append(torch.softmax(logits.float(), dim=-1).cpu().numpy())
+        if not scores:
+            return np.empty((0, self._model.config.num_labels), dtype=np.float32)
+        return np.concatenate(scores)
 
     def save(self, directory: Path) -> Path:
-        raise NotImplementedError("W2 pkt 5: DistilBertClassifier.save — pisze autor")
+        self._require_fitted()
+        metadata = {**self._metadata, "max_len": self._max_len}
+        text = json.dumps(metadata, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
+        directory.mkdir(parents=True, exist_ok=False)
+        try:
+            # HF zapisuje wiele plików; przerwany zapis sprząta katalog tymczasowy.
+            with TemporaryDirectory(prefix=".saving-", dir=directory) as temporary:
+                staging = Path(temporary)
+                self._model.save_pretrained(staging)
+                self._tokenizer.save_pretrained(staging)
+                (staging / _DISTILBERT_METADATA).write_text(text, encoding="utf-8", newline="\n")
+                for path in staging.iterdir():
+                    path.rename(directory / path.name)
+        except BaseException:
+            with suppress(OSError):
+                directory.rmdir()
+            raise
+        return directory
 
     @classmethod
     def load(cls, directory: Path, settings: Settings) -> DistilBertClassifier:
-        raise NotImplementedError("W2 pkt 5: DistilBertClassifier.load — pisze autor")
+        metadata_path = directory / _DISTILBERT_METADATA
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            label_hash = label_map_sha256(settings.dataset.label_map_path)
+        except (OSError, ValueError) as exc:
+            raise ModelArtifactError(
+                f"nie można odczytać metadanych lub mapy: {metadata_path}"
+            ) from exc
+        if not isinstance(metadata, dict) or metadata.get("label_map_sha256") != label_hash:
+            raise ModelArtifactError("hash mapy etykiet niezgodny z artefaktem DistilBERT")
+
+        from transformers import AutoConfig, AutoModelForSequenceClassification, AutoTokenizer
+
+        label_map = dict(LabelMap.from_settings(settings).name_to_id)
+        config = AutoConfig.from_pretrained(directory, local_files_only=True)
+        id_to_name = {class_id: name for name, class_id in label_map.items()}
+        if config.id2label != id_to_name or config.label2id != label_map:
+            raise ModelArtifactError("mapa etykiet w config.json niezgodna z mapą projektu")
+        classifier = cls(settings)
+        classifier._tokenizer = AutoTokenizer.from_pretrained(directory, local_files_only=True)
+        classifier._model = AutoModelForSequenceClassification.from_pretrained(
+            directory, config=config, local_files_only=True,
+        ).to("cpu").eval()
+        classifier._max_len = metadata.get("max_len", settings.models.distilbert.max_len)
+        classifier._metadata = metadata
+        return classifier

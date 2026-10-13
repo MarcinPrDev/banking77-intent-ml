@@ -34,8 +34,8 @@ class ModelArtifactError(RuntimeError):
     """Artefakt niekompletny albo niezgodny z bieżącym środowiskiem (mapa etykiet, sklearn)."""
 
 
-def _label_map_sha256(path: Path) -> str:
-    """Hash treści JSON: kolejność kluczy i formatowanie pliku nie mają znaczenia."""
+def label_map_sha256(path: Path) -> str:
+    """Wspólny hash mapy dla artefaktów; kolejność kluczy i format JSON nie mają znaczenia."""
     label_map = json.loads(path.read_text(encoding="utf-8"))
     text = json.dumps(label_map, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -55,7 +55,7 @@ def build_metadata(*, model_name: str, run_id: str | None, settings: Settings) -
         "run_id": run_id,
         "sklearn_version": sklearn.__version__,
         "numpy_version": np.__version__,
-        "label_map_sha256": _label_map_sha256(settings.dataset.label_map_path),
+        "label_map_sha256": label_map_sha256(settings.dataset.label_map_path),
         "data_commit": settings.dataset.commit,
         "sha256_val_ids": manifest["sha256_val_ids"],
     }
@@ -113,10 +113,10 @@ def load_model(path: Path, *, settings: Settings) -> BaseEstimator:
             f"środowisko {sklearn.__version__}"
         )
     try:
-        label_map_sha256 = _label_map_sha256(settings.dataset.label_map_path)
+        label_hash = label_map_sha256(settings.dataset.label_map_path)
     except (OSError, ValueError) as exc:
         raise ModelArtifactError("nie można sprawdzić mapy etykiet") from exc
-    if metadata.get("label_map_sha256") != label_map_sha256:
+    if metadata.get("label_map_sha256") != label_hash:
         raise ModelArtifactError("hash mapy etykiet niezgodny z artefaktem")
     if not path.is_file():
         raise ModelArtifactError(f"brak pliku modelu: {path}")
