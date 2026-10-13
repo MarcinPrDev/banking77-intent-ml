@@ -4,50 +4,97 @@ Zasady dla implementacji (pilnuje ich `tests/test_predictor.py`):
 - hiperparametry wyłącznie z zamrożonej konfiguracji `models.<name>.frozen` (i bazy z configu);
 - torch, transformers i sentence-transformers importuj wewnątrz metod — `models.factory`
   importuje ten moduł, a CI ma tylko extra `dev`;
+- builder z `baselines` importuj dopiero w `fit` — zależy od MLflow, zbędnego przy predykcji;
 - ciężkie modele ładuj przez funkcje infrastruktury wołane przez moduł (`embeddings.encode_texts`,
   nie `from ... import encode_texts`) — test kontraktu podmienia je atrapami, więc działa bez
   pobierania i bez GPU. MiniLM: `features.embeddings.encode_texts`; DistilBERT:
   `models.distilbert._load_tokenizer`, `_load_model`, `training_arguments`;
 - artefakt = katalog (`paths.models_dir/<name>` przy eksporcie); istniejący -> `FileExistsError`.
 
-TODO(Marcin, W2 pkt 5): logika trzech adapterów — kontrakt w `models/predictor.py`.
+Kontrakt w `models/predictor.py`; adaptery MiniLM i DistilBERT pozostają do uzupełnienia.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
+from contextlib import suppress
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
+from sklearn.exceptions import NotFittedError
 
 from banking77_intent_ml.config import Settings
+from banking77_intent_ml.models.persistence import (
+    MODEL_SUFFIX,
+    build_metadata,
+    load_model,
+    save_model,
+)
 from banking77_intent_ml.models.predictor import IntentClassifier
+
+_SKLEARN_ARTIFACT = f"model{MODEL_SUFFIX}"  # TF-IDF+LR: plik modelu w katalogu artefaktu
 
 
 class TfidfLrClassifier(IntentClassifier):
     """TF-IDF + LR, zamrożona próba HPO (`models.tfidf_lr.frozen`).
 
-    TODO(Marcin): fit — pipeline z `build_tfidf_lr` na konfiguracji `frozen`; save/load —
-    `persistence` (joblib + metadane z kontrolą mapy etykiet i wersji sklearn) w katalogu.
+    Pipeline z `build_tfidf_lr` na konfiguracji `frozen`; artefakt to `model.joblib`
+    i `model.json` z kontrolą mapy etykiet i wersji sklearn. `run_id=None`, ponieważ
+    adapter dopasowuje model do podanych danych bez tworzenia runu MLflow.
     """
 
     name = "tfidf_lr"
 
     def fit(self, texts: Sequence[str], labels: Sequence[int]) -> TfidfLrClassifier:
-        raise NotImplementedError("W2 pkt 5: TfidfLrClassifier.fit — pisze autor")
+        from banking77_intent_ml.models.baselines import build_tfidf_lr
+
+        base = self.settings.models.tfidf_lr
+        if base.frozen is None:
+            raise ValueError("models.tfidf_lr.frozen jest puste — najpierw zamrożenie konfiguracji")
+        config = replace(
+            base, tfidf=dict(base.frozen["tfidf"]), logreg=dict(base.frozen["logreg"])
+        )
+        model = build_tfidf_lr(config, seed=self.settings.models.seed)
+        model.fit(texts, labels)
+        self._model = model
+        return self
+
+    def _require_fitted(self) -> None:
+        if not hasattr(self, "_model"):
+            raise NotFittedError("TfidfLrClassifier: najpierw wywołaj fit() albo load().")
 
     def predict(self, texts: Sequence[str]) -> np.ndarray:
-        raise NotImplementedError("W2 pkt 5: TfidfLrClassifier.predict — pisze autor")
+        self._require_fitted()
+        return np.asarray(self._model.predict(texts), dtype=int)
 
     def predict_proba(self, texts: Sequence[str]) -> np.ndarray:
-        raise NotImplementedError("W2 pkt 5: TfidfLrClassifier.predict_proba — pisze autor")
+        self._require_fitted()
+        probabilities = self._model.predict_proba(texts)
+        scores = np.zeros((probabilities.shape[0], self.settings.dataset.n_classes), dtype=float)
+        # sklearn zwraca kolumny dla classes_; brak klasy w treningu nie może przesunąć id.
+        scores[:, self._model.classes_] = probabilities
+        return scores
 
     def save(self, directory: Path) -> Path:
-        raise NotImplementedError("W2 pkt 5: TfidfLrClassifier.save — pisze autor")
+        self._require_fitted()
+        model = self._model
+        metadata = build_metadata(model_name=self.name, run_id=None, settings=self.settings)
+        directory.mkdir(parents=True, exist_ok=False)
+        try:
+            save_model(model, directory / _SKLEARN_ARTIFACT, metadata=metadata)
+        except BaseException:
+            # Usuwamy tylko własny pusty katalog; sprzątanie nie maskuje błędu zapisu.
+            with suppress(OSError):
+                directory.rmdir()
+            raise
+        return directory
 
     @classmethod
     def load(cls, directory: Path, settings: Settings) -> TfidfLrClassifier:
-        raise NotImplementedError("W2 pkt 5: TfidfLrClassifier.load — pisze autor")
+        classifier = cls(settings)
+        classifier._model = load_model(directory / _SKLEARN_ARTIFACT, settings=settings)
+        return classifier
 
 
 class MiniLmKnnClassifier(IntentClassifier):

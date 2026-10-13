@@ -14,18 +14,25 @@ się sam, gdy autor go napisze (`_skip_while_skeleton` do usunięcia razem z ost
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from contextlib import contextmanager
+from copy import deepcopy
 from dataclasses import replace
+from pickle import PicklingError
 
+import joblib
 import numpy as np
 import pandas as pd
 import pytest
+from sklearn.exceptions import NotFittedError
 from sklearn.feature_extraction.text import HashingVectorizer
 
 from banking77_intent_ml.config import load_settings
 from banking77_intent_ml.features import embeddings
 from banking77_intent_ml.models.classifiers import TfidfLrClassifier
 from banking77_intent_ml.models.factory import STRATEGIES, build_predictor, load_predictor
+from banking77_intent_ml.models.persistence import ModelArtifactError, load_model
 
 _LABEL_MAP = {"card_arrival": 0, "exchange_rate": 1, "top_up_failed": 2}
 _TRAIN_TEXTS = [
@@ -39,6 +46,21 @@ _SPECIAL_TOKENS = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"]
 
 
 # --- Fabryka -------------------------------------------------------------------------------------
+
+
+def test_factory_import_does_not_load_mlflow(tmp_path):
+    # Osobny proces: inne testy mogą już mieć MLflow w sys.modules.
+    code = """
+import sys
+import banking77_intent_ml.models.factory
+
+assert "mlflow" not in sys.modules, "import fabryki predyktorów ładuje MLflow"
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=tmp_path, capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.parametrize("name", sorted(STRATEGIES))
@@ -153,7 +175,7 @@ def _skip_while_skeleton(name: str):
     try:
         yield
     except NotImplementedError as exc:
-        if "W2 pkt 5" not in str(exc):
+        if name == "tfidf_lr" or "W2 pkt 5" not in str(exc):
             raise
         pytest.skip(f"{name}: adapter jeszcze nie napisany — {exc}")
 
@@ -193,3 +215,126 @@ def test_strategy_honours_contract(name, toy_settings, monkeypatch):
         assert type(loaded) is type(predictor)
         np.testing.assert_array_equal(loaded.predict(_QUERIES), predicted)
         np.testing.assert_allclose(loaded.predict_proba(_QUERIES), scores, rtol=0, atol=1e-6)
+
+
+def test_tfidf_adapter_uses_frozen_params_and_seed_without_mutation(toy_settings):
+    settings = replace(toy_settings, models=replace(toy_settings.models, seed=17))
+    original = deepcopy(settings.models.tfidf_lr)
+    predictor = TfidfLrClassifier(settings)
+
+    assert predictor.fit(_TRAIN_TEXTS, _TRAIN_LABELS) is predictor
+    directory = predictor.save(settings.paths.models_dir / "frozen")
+    model_path, = directory.glob("*.joblib")
+    model = load_model(model_path, settings=settings)
+
+    for step in ("tfidf", "logreg"):
+        for key, value in original.frozen[step].items():
+            assert model.named_steps[step].get_params()[key] == value
+    assert model.named_steps["logreg"].random_state == 17
+    assert settings.models.tfidf_lr == original
+    metadata = json.loads(model_path.with_suffix(".json").read_text(encoding="utf-8"))
+    assert metadata["model_name"] == "tfidf_lr"
+    assert metadata["run_id"] is None  # fit adaptera nie tworzy runu MLflow
+
+
+def test_tfidf_scores_keep_label_ids_when_training_omits_classes(tmp_path):
+    settings = load_settings()
+    n_classes = settings.dataset.n_classes
+    class_ids = [1, n_classes - 1]
+    labels = [class_ids[label] for label in _TRAIN_LABELS[:6]]
+    predictor = TfidfLrClassifier(settings).fit(_TRAIN_TEXTS[:6], labels)
+
+    scores = predictor.predict_proba(_QUERIES)
+
+    assert scores.shape == (len(_QUERIES), n_classes)
+    absent = [class_id for class_id in range(n_classes) if class_id not in class_ids]
+    np.testing.assert_array_equal(scores[:, absent], 0)
+    np.testing.assert_allclose(scores.sum(axis=1), 1)
+    np.testing.assert_array_equal(predictor.predict(_QUERIES), scores.argmax(axis=1))
+    assert set(predictor.predict(_QUERIES)) <= set(class_ids)
+
+    directory = predictor.save(tmp_path / "sparse-classes")
+    # Odczyt korzysta z zapisanego pipeline'u, nawet gdy nie ma konfiguracji do ponownego fitu.
+    without_frozen = replace(settings.models.tfidf_lr, frozen=None)
+    settings = replace(settings, models=replace(settings.models, tfidf_lr=without_frozen))
+    loaded = TfidfLrClassifier.load(directory, settings)
+    assert loaded is not predictor
+    np.testing.assert_array_equal(loaded.predict_proba(_QUERIES), scores)
+    np.testing.assert_array_equal(loaded.predict(_QUERIES), predictor.predict(_QUERIES))
+
+
+def test_tfidf_save_rejects_existing_empty_directory(toy_settings):
+    predictor = TfidfLrClassifier(toy_settings).fit(_TRAIN_TEXTS, _TRAIN_LABELS)
+    directory = toy_settings.paths.models_dir / "empty"
+    directory.mkdir(parents=True)
+
+    with pytest.raises(FileExistsError):
+        predictor.save(directory)
+
+    assert list(directory.iterdir()) == []
+
+
+@pytest.mark.parametrize("error_type", [OSError, PicklingError])
+def test_tfidf_failed_save_allows_retry(toy_settings, monkeypatch, error_type):
+    predictor = TfidfLrClassifier(toy_settings).fit(_TRAIN_TEXTS, _TRAIN_LABELS)
+    directory = toy_settings.paths.models_dir / "retry"
+    error = error_type("przerwany zapis modelu")
+
+    def broken_dump(model, file, **kwargs):
+        file.write(b"niekompletny model")
+        raise error
+
+    with monkeypatch.context() as patch:
+        patch.setattr(joblib, "dump", broken_dump)
+        with pytest.raises(error_type, match="przerwany zapis") as caught:
+            predictor.save(directory)
+
+    assert caught.value is error
+    assert not directory.exists()
+    assert predictor.save(directory) == directory
+    loaded = TfidfLrClassifier.load(directory, toy_settings)
+    np.testing.assert_array_equal(loaded.predict_proba(_QUERIES), predictor.predict_proba(_QUERIES))
+
+
+def test_tfidf_failed_save_preserves_other_files_and_original_error(toy_settings, monkeypatch):
+    predictor = TfidfLrClassifier(toy_settings).fit(_TRAIN_TEXTS, _TRAIN_LABELS)
+    directory = toy_settings.paths.models_dir / "nonempty"
+    other_file = directory / "other.txt"
+    error = OSError("przerwany zapis modelu")
+
+    def broken_dump(model, file, **kwargs):
+        other_file.write_text("zachowaj", encoding="utf-8")
+        raise error
+
+    monkeypatch.setattr(joblib, "dump", broken_dump)
+    with pytest.raises(OSError, match="przerwany zapis") as caught:
+        predictor.save(directory)
+
+    assert caught.value is error
+    assert list(directory.iterdir()) == [other_file]
+    assert other_file.read_text(encoding="utf-8") == "zachowaj"
+
+
+@pytest.mark.parametrize("method", ["predict", "predict_proba", "save"])
+def test_tfidf_unfitted_reports_required_fit_or_load(toy_settings, method):
+    predictor = TfidfLrClassifier(toy_settings)
+    directory = toy_settings.paths.models_dir / "unfitted"
+    argument = directory if method == "save" else _QUERIES
+
+    with pytest.raises(NotFittedError, match=r"fit\(\).*load\(\)"):
+        getattr(predictor, method)(argument)
+
+    assert not directory.exists()
+
+
+@pytest.mark.parametrize("field", ["label_map_sha256", "sklearn_version"])
+def test_tfidf_load_checks_artifact_metadata(toy_settings, field):
+    predictor = TfidfLrClassifier(toy_settings).fit(_TRAIN_TEXTS, _TRAIN_LABELS)
+    directory = predictor.save(toy_settings.paths.models_dir / "invalid-metadata")
+    metadata_path, = directory.glob("*.json")
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata[field] = "niezgodne"
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+
+    with pytest.raises(ModelArtifactError):
+        TfidfLrClassifier.load(directory, toy_settings)
