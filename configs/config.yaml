@@ -195,6 +195,8 @@ mlflow:
   experiment: banking77-intent
 
 api:
+  model: tfidf_lr                          # strategia z models.factory.STRATEGIES, artefakt w paths.models_dir/<model>; baseline W2, model docelowy w W3
+  max_text_chars: 500                      # decyzja autora 13.10: max w train+val 433 znaki (p99 220); dłuższy, pusty lub same spacje -> 422
   model_version_env: MODEL_VERSION         # wersja artefaktu wpieczonego w obraz; zwracana w /health i /predict
   host: 0.0.0.0
   port: 8000

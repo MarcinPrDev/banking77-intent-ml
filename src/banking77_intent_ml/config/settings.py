@@ -190,6 +190,8 @@ class MlflowConfig:
 
 @dataclass(frozen=True)
 class ApiConfig:
+    model: str  # strategia z `models.factory.STRATEGIES`; artefakt w `paths.models_dir/<model>`
+    max_text_chars: int  # dłuższy tekst -> 422 (pusty i same spacje też)
     model_version_env: str
     host: str
     port: int
@@ -328,6 +330,8 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
             experiment=raw["mlflow"]["experiment"],
         ),
         api=ApiConfig(
+            model=str(api["model"]),
+            max_text_chars=int(api["max_text_chars"]),
             model_version_env=api["model_version_env"],
             host=str(api["host"]),
             port=int(api["port"]),
