@@ -91,12 +91,15 @@ Liczby z publikacji to konkretne konfiguracje, nie gwarantowany przedział wynik
 | Dummy | brak | kontrola rozkładu i metryk | — |
 | **TF-IDF + Logistic Regression** | `tfidf_lr.hpo_trials` = 16 konfiguracji wektoryzatora (słowa/znaki, n-gramy, min_df), regularyzacji (C) i wag klas (`class_weight`); punkt startu = pierwsza konfiguracja z configu (W1) | tani, interpretowalny baseline; kandydat do wdrożenia | — |
 | **all-MiniLM-L6-v2 (zamrożony) + kNN** | kilka `k` × ważenie (uniform/distance) | wartość reprezentacji semantycznej bez dostrajania | HF `sentence-transformers/all-MiniLM-L6-v2`, Apache-2.0, rewizja przypięta w configu |
-| **DistilBERT + głowica 77 klas** | 2–3 konfiguracje (np. LR × epoki), start wg Qi 2021 | efekt dostrajania reprezentacji; RTX 5080 | HF `distilbert/distilbert-base-uncased`, Apache-2.0, rewizja przypięta |
+| **DistilBERT + głowica 77 klas** | 5 LR {2–6}e-5 × 5 epok = 25 kandydatów; budżet ustalony przed wynikami, pozostałe parametry wg Qi 2021 | efekt dostrajania reprezentacji; RTX 5080 | HF `distilbert/distilbert-base-uncased`, Apache-2.0, rewizja przypięta |
 | *(stretch A)* LLM zero-shot | brak strojenia; prompt dobrany na walidacji | koszt/latencja/błędy formatu vs modele dostrajane | Groq (plan płatny, Developer tier) przez LiteLLM; model w `llm.model` |
 | *(fallback)* TF-IDF + LinearSVC | mały grid C | trzecia metoda, gdy transformer nie ruszy | — |
 
 Wartości liczbowe (budżety, hiperparametry startowe, seed) — wyłącznie z `configs/config.yaml`.
-VRAM, czas treningu i latencja na sprzęcie autora: **do zmierzenia** (nikt tego nie liczył).
+Budżet DistilBERT zwiększono z 2–3 do 5 LR, by sprawdzić wartości po obu stronach 4e-5
+z publikacji; decyzja przed wynikami zapobiega dokładaniu prób pod wynik, ale nie wyrównuje
+budżetów między modelami.
+Czas treningu, VRAM i koszty CPU na sprzęcie autora zapisano w MLflow.
 
 ## Architektura (wzorce i SOLID)
 
@@ -157,7 +160,15 @@ przez `fetch_data.py --only train` (bez `test.csv`; działa tylko dla TF-IDF; ma
 odtworzyć podział `make_splits` i porównać hash z manifestem — albo refitować na całych 10 003 bez
 podziału), (c) GCS (tylko jeśli GCP wejdzie jako stretch). Decyzja jest częścią ADR wyboru
 artefaktu w W3 — W4 tylko ją implementuje.
-Jeśli wygra DistilBERT, obraz musi mieć torch CPU — rozmiar i czas budowy **do zmierzenia**.
+Jeśli wygra MiniLM+kNN albo DistilBERT, obraz musi mieć torch CPU — rozmiar i czas budowy
+**do zmierzenia**.
+
+**MiniLM+kNN — do decyzji w W3:** adapter zapisuje indeks kNN i metadane, a wagi enkodera
+z przypiętej rewizji pozostają w cache Hugging Face. Obraz musi zawierać również enkoder:
+do wyboru wpieczenie cache HF albo zapis enkodera wewnątrz artefaktu. W tabeli kosztów
+rozmiar obejmuje **indeks kNN + wagi, tokenizer i konfigurację enkodera**. `load()` rozgrzewa
+enkoder przed gotowością API; pomiar zimnego startu nadal obejmuje `load` i pierwszą predykcję
+w nowym procesie.
 
 ## Quickstart
 
@@ -316,7 +327,7 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
 - [x] **2.10 — zależności pod BANKING77**: z zależności głównych usunięte `xgboost`, `duckdb`,
       `pygeohash`; dodany extra `serving` (`fastapi`, `uvicorn[standard]`, `httpx` — wymagany przez
       `TestClient`); `optuna` zostaje do decyzji przy HPO w W2 (Optuna czy siatka)
-- [ ] W2 (10–11.10): trzy ścieżki + HPO + pomiary CPU + API z baseline'em
+- [ ] W2 (plan 10–11.10, realizacja 12–14.10): trzy ścieżki + HPO + pomiary CPU + API z baseline'em
   - [x] HPO TF-IDF+LR (12.10): Optuna TPE, 16 prób na walidacji, wybór po macro-F1 (remis → mniej
     cech); zamrożona próba #12 w `models.tfidf_lr.frozen`
   - [x] MiniLM+kNN (12.10): embeddingi z przypiętej rewizji (cache), siatka k {1, 3, 5, 10} ×
@@ -324,6 +335,9 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
   - [x] DistilBERT (13.10): 5 LR {2–6}e-5 × 5 epok (budżet podniesiony z 2–3 przed wynikami),
     ocena co epokę, wybór po macro-F1 (remis → mniej epok); zamrożony wariant 4, epoka 4
     w `models.distilbert.frozen`, artefakt w `models/distilbert/`; zwycięzca na brzegu siatki LR
+  - Co nie zadziałało: weekend 10–11.10 bez pracy, więc W2 przesunął się na 12–14.10.
+    Czas zabrały też problemy środowiska: czerwone CI po imporcie `sentence-transformers`,
+    brak `accelerate`, zmiany API w `transformers` 5 i puste `CUDA_VISIBLE_DEVICES` na Windows.
 - [ ] W3 (17–18.10): zamrożenie, ocena końcowa, analiza błędów, artefakt, testy, Docker
 - [ ] W4 (24–25.10): kind + workflow CI + test HTTP + odtworzenie z instrukcji
 - [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
@@ -336,6 +350,7 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
 - Rezerwa: zużyto **8 z 8 h** (stan po W1, 9.10: W1 zajął 20 h przy budżecie 12 h; kolejne
   nadwyżki = świadome nadgodziny albo cięcie wg kolejności z *Bramka po W1 i fallback*;
   aktualizacja na koniec każdego slotu)
+  - W2 (12–14.10): **14 h pracy przy budżecie 14 h — 0 h nadwyżki**; rezerwa nadal zużyta 8 z 8 h.
 
 **Wyniki na walidacji** (W1–W2; zamrożona walidacja z manifestu — do wyboru konfiguracji,
 nie do porównań z literaturą; wszystkie liczby z MLflow):
@@ -347,7 +362,23 @@ nie do porównań z literaturą; wszystkie liczby z MLflow):
 | TF-IDF + LR | W1, przed HPO: wartości domyślne sklearn 1.9 (unigramy, `C` = 1,0, bez wag klas) | 84,39% | 83,89% | 8 504 / 1 499 | 0 (HPO w W2) | 0,50 s |
 | TF-IDF + LR | **zamrożona (HPO W2, próba #12):** znaki `char_wb` (2,4), `min_df` 2, `sublinear_tf`, `C` ≈ 49,7, wagi `balanced` | 89,26% | 89,32% | 8 504 / 1 499 | 16 (Optuna TPE) | 2,95 s |
 | MiniLM + kNN | **zamrożona (siatka W2):** all-MiniLM-L6-v2 @ `1110a243` (zamrożone embeddingi, cosinus) + kNN k = 1, `uniform` | 91,06% | 91,27% | 8 504 / 1 499 | 8 (siatka 4 × 2) | 7,7 s (kodowanie train, GPU) + 0,01 s (kNN) |
-| DistilBERT | **zamrożona (W2):** distilbert-base-uncased @ `12040acc`, LR 6e-5, epoka 4 z 5 (wariant 4; reszta jak Qi 2021: batch 32, `max_len` 128, warmup 10%, wd 0,01) | 90,99% | 90,76% | 8 504 / 1 499 | 25 (5 LR × 5 epok) | 22,8 s (5 epok z oceną co epokę, GPU) |
+| DistilBERT | **zamrożona (W2):** distilbert-base-uncased @ `12040acc`, LR 6e-5, epoka 4 z 5 (wariant 4; reszta jak Qi 2021: batch 32, `max_len` 128, warmup 10%, wd 0,01) | 90,99% | 90,76%[^distilbert] | 8 504 / 1 499 | 25 (5 LR × 5 epok) | 22,8 s (5 epok z oceną co epokę, GPU) |
+
+[^distilbert]: 90,76% to `val_macro_f1` z epoki 4 runu `f37e7471`; główne `macro_f1` tego runu to 90,78% z epoki 5. Różnica jest poniżej 0,001 (0,1 punktu procentowego), więc reguła remisu wybrała wcześniejszą epokę.
+
+**Zysk ze strojenia (W2):** najwięcej na tej walidacji zyskał TF-IDF+LR (+0,0543 macro-F1);
+drugie osiem prób dodało 0,0099. MiniLM+kNN zachował najwyższy wynik, a DistilBERT poprawił
+konfigurację Qi 2021 o 0,0054. Przy różnych punktach startowych, budżetach i jednym seedzie
+nie jest to porównanie pełnych możliwości modeli.
+
+**Ograniczenie DistilBERT:** zwycięskie LR 6e-5 leży na brzegu siatki, a macro-F1 dla LR
+2e-5–4e-5 nadal rosło w 5. epoce, więc ten budżet nie wyczerpuje możliwości modelu.
+
+**Jakość a koszt (W2, pomiary `cpu_cost_w2` w MLflow):** TF-IDF+LR ma najniższą latencję,
+najmniejszy artefakt i najkrótszy zimny start, kosztem niższego macro-F1.
+MiniLM+kNN wygrywa jakością; DistilBERT ma niższe macro-F1 i większy artefakt, ale krótszy
+zimny start i podobną latencję po rozgrzaniu przy 8 wątkach CPU.
+Przy k = 1 `score` kNN w API zawsze wynosi 1,0 — nie informuje o pewności predykcji.
 
 TF-IDF + LR: dwa runy tej samej konfiguracji (`89d5ccf6`, `bb347398` — ten drugi dał artefakt
 w `models/`) mają identyczne metryki, co przy okazji potwierdza determinizm treningu.
@@ -368,6 +399,16 @@ innym klasom; przy sześciu przykładach jedna pomyłka zmienia recall o 16,7 pu
 | TF-IDF + LR | do zmierzenia | | | | | |
 | MiniLM + kNN | do zmierzenia | | | | | |
 | DistilBERT | do zmierzenia | | | | | |
+
+## Dalsze prace
+
+Po oddaniu projektu (decyzja C z 13.10):
+
+- Szersze HPO dla wszystkich trzech ścieżek.
+- Zagnieżdżona grupowana CV: strojenie na podziałach wewnętrznych, ocena na zewnętrznych;
+  znormalizowane duplikaty zawsze razem.
+- Kilka seedów, żeby sprawdzić stabilność wyników.
+- Front jakość–koszt: warianty, których nie da się poprawić w jednym kryterium bez pogorszenia drugiego.
 
 ## Historia decyzji
 
