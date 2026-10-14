@@ -40,6 +40,18 @@ def _frozen_ids(settings: Settings) -> tuple[list[int], list[int]]:
     return ids[0], ids[1]
 
 
+def full_train(data: TrainVal) -> tuple[pd.Series, pd.Series]:
+    """Train + dawna walidacja (10 003) w kolejności wierszy train.csv — refit przed testem (W3).
+
+    Decyzja autora 14.10.2026 (ADR-0002): refit zamrożonych konfiguracji na całym train; dawna
+    walidacja przestaje służyć ocenie i strojeniu. Kolejność = pozycja w train.csv, niezależna
+    od podziału.
+    """
+    x = pd.concat([data.x_train, data.x_val]).sort_index()
+    y = pd.concat([data.y_train, data.y_val]).sort_index()
+    return x, y
+
+
 def load_train_val(settings: Settings | None = None) -> TrainVal:
     """Train → fit, val → ocena: teksty i id klas wg zamrożonego splitu i mapy etykiet."""
     s = settings if settings is not None else load_settings()

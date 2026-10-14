@@ -149,9 +149,43 @@ def test_cli_refuses_second_measurement_before_loading_data(
     monkeypatch.setattr(
         cli, "load_train_val", lambda *args: pytest.fail("dane wczytane mimo pomiaru")
     )
+    monkeypatch.setattr("sys.argv", ["measure_cost.py"])
 
     with pytest.raises(SystemExit) as exc:
         cli.main()
 
     assert exc.value.code == 1
     assert "pomiar" in capsys.readouterr().out
+
+
+def test_cli_final_uses_final_artifacts_and_separate_study(
+    tmp_path, tmp_mlflow_settings, monkeypatch, capsys
+):
+    spec = importlib.util.spec_from_file_location("measure_cost_cli_final", _CLI)
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    settings = replace(
+        tmp_mlflow_settings,
+        paths=replace(tmp_mlflow_settings.paths, final_models_dir=tmp_path / "final"),
+    )
+    studies = []
+    monkeypatch.setattr(cli, "load_settings", lambda: settings)
+    monkeypatch.setattr(cli, "count_runs_with_tag", lambda s, key, value: studies.append(value))
+    monkeypatch.setattr(cli, "load_train_val", lambda *args: pytest.fail("dane wczytane"))
+    monkeypatch.setattr("sys.argv", ["measure_cost.py", "--final"])
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+
+    assert exc.value.code == 1
+    assert studies == [cost.STUDY_NAME_FINAL]
+    out = capsys.readouterr().out
+    assert str(tmp_path / "final") in out
+    assert "refit_final.py" in out
+
+
+def test_artifact_bytes_reads_given_root(tmp_path):
+    (tmp_path / "tfidf_lr").mkdir()
+    (tmp_path / "tfidf_lr" / "model.joblib").write_bytes(b"x" * 7)
+
+    assert cost.artifact_bytes("tfidf_lr", load_settings(), tmp_path) == 7

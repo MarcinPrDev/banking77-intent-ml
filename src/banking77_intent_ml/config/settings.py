@@ -61,6 +61,7 @@ class PathsConfig:
     raw_dir: Path
     splits_dir: Path
     models_dir: Path
+    final_models_dir: Path  # refit na całym train (10 003) przed oceną na teście (W3)
     mlruns: Path  # artefakty runów MLflow (tabele, pliki)
     mlflow_db: Path  # baza SQLite z runami MLflow (parametry, metryki, tagi)
     cache_dir: Path  # dane pochodne (embeddingi) — poza gitem, odtwarzalne
@@ -295,6 +296,7 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
             raw_dir=_abs(raw["paths"]["raw_dir"]),
             splits_dir=_abs(raw["paths"]["splits_dir"]),
             models_dir=_abs(raw["paths"]["models_dir"]),
+            final_models_dir=_abs(raw["paths"]["final_models_dir"]),
             mlruns=_abs(raw["paths"]["mlruns"]),
             mlflow_db=_abs(raw["paths"]["mlflow_db"]),
             cache_dir=_abs(raw["paths"]["cache_dir"]),

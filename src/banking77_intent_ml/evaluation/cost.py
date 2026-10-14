@@ -39,6 +39,7 @@ from banking77_intent_ml.evaluation.tracking import configure_mlflow, protocol_t
 
 STUDY_TAG = "cost_study"
 STUDY_NAME = "cpu_cost_w2"  # wartość tagu — jeden pomiar oficjalny wszystkich ścieżek
+STUDY_NAME_FINAL = "cpu_cost_final"  # artefakty po reficie na 10 003 (W3), osobny pomiar
 WORKER_MODULE = "banking77_intent_ml.evaluation.cost_worker"
 THREAD_ENV = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS")
 RAW_ARTIFACT = "cost_raw.json"
@@ -148,22 +149,29 @@ def encoder_bytes(settings: Settings) -> int:
     raise FileNotFoundError(f"brak {cfg.model_id}@{cfg.revision} w cache Hugging Face")
 
 
-def artifact_bytes(name: str, settings: Settings) -> int:
-    size = directory_bytes(settings.paths.models_dir / name)
+def artifact_bytes(name: str, settings: Settings, root: Path | None = None) -> int:
+    """Cały artefakt `root/<name>` (domyślnie `paths.models_dir`); kNN plus wagi enkodera."""
+    size = directory_bytes((root or settings.paths.models_dir) / name)
     if name == "minilm_knn":
         size += encoder_bytes(settings)
     return size
 
 
 def log_cost_run(
-    result: CostResult, settings: Settings, *, sample_ids_sha256: str, artifact_size: int,
+    result: CostResult,
+    settings: Settings,
+    *,
+    sample_ids_sha256: str,
+    artifact_size: int,
+    study: str = STUDY_NAME,
+    artifact_root: Path | None = None,
 ) -> str:
     """Run MLflow na ścieżkę × wątki: parametry pomiaru, metryki, surowe czasy jako artefakt."""
     cfg = settings.evaluation.cost
     configure_mlflow(settings)
     with mlflow.start_run(run_name=f"cost-{result.model}-t{result.threads}") as run:
         mlflow.set_tags({
-            **protocol_tags(settings), "model_family": result.model, STUDY_TAG: STUDY_NAME,
+            **protocol_tags(settings), "model_family": result.model, STUDY_TAG: study,
         })
         mlflow.log_params({
             "threads": result.threads,
@@ -173,6 +181,7 @@ def log_cost_run(
             "warmup": cfg.warmup,
             "cold_runs": cfg.cold_runs,
             "sample_ids_sha256": sample_ids_sha256,
+            "artifact_root": str(artifact_root or settings.paths.models_dir),
             "device": "cpu",
             "processor": platform.processor(),
             "cpu_count": os.cpu_count(),

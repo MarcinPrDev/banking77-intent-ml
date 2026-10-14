@@ -32,6 +32,7 @@ paths:
   raw_dir: dane/banking77                  # surowe CSV (poza gitem) — pobiera scripts/fetch_data.py
   splits_dir: dane/splits                  # indeksy zamrożonego splitu (poza gitem; deny na Edit/Write)
   models_dir: models                       # artefakty wybrane do wdrożenia (poza gitem; /models/ w .gitignore)
+  final_models_dir: models/final           # refit na 10 003 przed testem (W3, decyzja autora 14.10); artefakty W2 zostają w models_dir
   # Lokalny tracking MLflow (poza gitem; decyzja 6.10.2026): runy w bazie SQLite `mlflow_db`,
   # artefakty (tabele, pliki) w `mlruns`. settings.py buduje z nich bezwzględne URI
   # (settings.mlflow.tracking_uri / artifact_location) — MLflow 3.14 odrzuca magazyn plikowy,
