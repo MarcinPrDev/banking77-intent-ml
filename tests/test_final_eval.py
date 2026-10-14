@@ -2,7 +2,7 @@
 
 Infra (asystent): wczytanie testu z kontrolą hashy i zakresu podzbiorów, run MLflow z metrykami
 podzbiorów i artefaktami, licznik runów testowych, blokady CLI przed wczytaniem testu.
-Kontrakty `predict_test` i `subset_results` — testy autora (szkielety z fixture'ami, skip).
+Kontrakty `predict_test` i `subset_results` — jeden przebieg i podzbiory po `row_id`.
 """
 
 from __future__ import annotations
@@ -177,7 +177,7 @@ def test_cli_refuses_before_loading_test(
     assert message in capsys.readouterr().out
 
 
-# --- Kontrakty funkcji autora (W3 §1.2) — fixture'y gotowe, asercje: TODO(Marcin) -------------
+# --- Kontrakty funkcji autora (W3 §1.2) --------------------------------------------------
 
 
 class _CountingPredictor(IntentClassifier):
@@ -189,6 +189,7 @@ class _CountingPredictor(IntentClassifier):
         super().__init__(settings)
         self.scores = scores
         self.calls = 0
+        self.received_texts = None
 
     def fit(self, texts, labels):
         raise NotImplementedError
@@ -198,6 +199,7 @@ class _CountingPredictor(IntentClassifier):
 
     def predict_proba(self, texts):
         self.calls += 1
+        self.received_texts = list(texts)
         assert len(texts) == len(self.scores)
         return self.scores
 
@@ -220,12 +222,56 @@ def small_test(synthetic_env):
 
 def test_predict_test_single_pass_over_full_test(small_test):
     """Kontrakt (decyzje autora 14.10): jeden `predict_proba` na wszystkich tekstach; kolumny
-    `PREDICTION_COLUMNS`; `row_id` = indeks testu; `y_true` = `test.y`; `y_pred` = argmax;
+    `PREDICTION_COLUMNS`; `row_id` = indeks testu; `y_true` dopasowane po id; `y_pred` = argmax;
     `score` = wynik zwróconej klasy."""
-    pytest.skip("TODO(Marcin, W3 §1.2): asercje kontraktu predict_test")
+    test, predictor = small_test
+    test = replace(test, x=test.x.iloc[::-1])  # y w innej kolejności niż teksty
+    expected_pred = np.r_[np.arange(1, 77), 0]
+    expected_score = np.linspace(0.6, 0.9, 77)
+    predictor.scores[np.arange(77), expected_pred] = expected_score
+
+    predictions = final.predict_test(predictor, test)
+
+    assert predictor.calls == 1
+    assert predictor.received_texts == test.x.tolist()
+    assert tuple(predictions.columns) == ("row_id", "y_true", "y_pred", "score")
+    assert len(predictions) == 77
+    np.testing.assert_array_equal(predictions["row_id"], test.x.index)
+    np.testing.assert_array_equal(predictions["y_true"], np.arange(76, -1, -1))
+    np.testing.assert_array_equal(predictions["y_pred"], expected_pred)
+    np.testing.assert_allclose(predictions["score"], expected_score)
+    for column in ("row_id", "y_true", "y_pred"):
+        assert pd.api.types.is_integer_dtype(predictions[column])
 
 
 def test_subset_results_come_from_the_same_predictions(small_test):
     """Kontrakt: klucze `SUBSETS`; `n_samples` = 77 / 70 / 7 (tu syntetycznie); metryki =
     `evaluate()` na wierszach podzbioru wybranych po `row_id` z tej samej ramki predykcji."""
-    pytest.skip("TODO(Marcin, W3 §1.2): asercje kontraktu subset_results")
+    test, _ = small_test
+    # Inne etykiety niż test.y: evaluate ma korzystać wyłącznie z zapisanej ramki.
+    true = (test.y.to_numpy() + 1) % 77
+    pred = true.copy()
+    mistakes = [0, 10, 69, 76]
+    pred[mistakes] = (true[mistakes] + 1) % 77
+    predictions = pd.DataFrame({
+        "row_id": test.x.index, "y_true": true, "y_pred": pred, "score": 0.9,
+    }).sample(frac=1, random_state=42).reset_index(drop=True)
+    before = predictions.copy(deep=True)
+
+    results = final.subset_results(predictions, test)
+
+    assert tuple(results) == final.SUBSETS
+    expected_subsets = {
+        "test": (list(range(77)), 77, 73 / 77),
+        "clean": (test.clean_ids, 70, 67 / 70),
+        "llm385": (test.llm_ids, 7, 5 / 7),
+    }
+    for name, (ids, count, accuracy) in expected_subsets.items():
+        expected = evaluate(true[ids], pred[ids], test.label_map)
+        actual = results[name]
+        assert actual.n_samples == count
+        assert actual.accuracy == pytest.approx(accuracy)
+        assert actual.metrics() == pytest.approx(expected.metrics())
+        pd.testing.assert_frame_equal(actual.per_class, expected.per_class)
+        pd.testing.assert_frame_equal(actual.confusion, expected.confusion)
+    pd.testing.assert_frame_equal(predictions, before)

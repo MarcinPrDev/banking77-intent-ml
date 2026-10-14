@@ -29,7 +29,7 @@ from banking77_intent_ml.config import Settings
 from banking77_intent_ml.data.labels import LabelMapError, load_label_map
 from banking77_intent_ml.data.loader import load_test
 from banking77_intent_ml.data.splits import SplitError, ids_sha256
-from banking77_intent_ml.evaluation.metrics import EvaluationResult
+from banking77_intent_ml.evaluation.metrics import EvaluationResult, evaluate
 from banking77_intent_ml.evaluation.tracking import configure_mlflow
 from banking77_intent_ml.models.predictor import IntentClassifier
 
@@ -83,19 +83,34 @@ def load_test_set(settings: Settings) -> TestSet:
 def predict_test(predictor: IntentClassifier, test: TestSet) -> pd.DataFrame:
     """JEDEN przebieg predykcji na pełnym teście -> ramka `PREDICTION_COLUMNS`, wiersz na przykład.
 
-    TODO(Marcin, W3 §1.2): `row_id` = indeks testu, `y_true` z `test.y`; `y_pred` i `score`
+    `row_id` = indeks tekstów, `y_true` z `test.y` dopasowane po tym indeksie; `y_pred` i `score`
     (wynik zwróconej klasy) z jednego wywołania `predict_proba` na wszystkich tekstach.
     """
-    raise NotImplementedError("W3 §1.2: predict_test — pisze autor")
+    scores = predictor.predict_proba(test.x.tolist())
+    return pd.DataFrame({
+        "row_id": test.x.index.to_numpy(),
+        "y_true": test.y.loc[test.x.index].to_numpy(),
+        "y_pred": scores.argmax(axis=1),
+        "score": scores.max(axis=1),
+    }, columns=list(PREDICTION_COLUMNS))
 
 
 def subset_results(predictions: pd.DataFrame, test: TestSet) -> dict[str, EvaluationResult]:
     """Wyniki `evaluate()` z TYCH SAMYCH predykcji dla każdego podzbioru z `SUBSETS`.
 
-    TODO(Marcin, W3 §1.2): `test` = wszystkie wiersze, `clean` = `test.clean_ids`,
+    `test` = wszystkie wiersze, `clean` = `test.clean_ids`,
     `llm385` = `test.llm_ids` (wybór po `row_id`).
     """
-    raise NotImplementedError("W3 §1.2: subset_results — pisze autor")
+    by_id = predictions.set_index("row_id")
+    subsets = {
+        "test": by_id,
+        "clean": by_id.loc[test.clean_ids],
+        "llm385": by_id.loc[test.llm_ids],
+    }
+    return {
+        name: evaluate(rows["y_true"], rows["y_pred"], test.label_map)
+        for name, rows in subsets.items()
+    }
 
 
 def count_test_runs(settings: Settings, name: str) -> int:
