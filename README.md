@@ -61,9 +61,10 @@ w configu); skrypt audytu trafi do repo w W1 (`notebooks/` lub `scripts/`), nota
    sha256 indeksów). Konflikty etykiet zbadane przed podziałem.
 3. **Test tylko do dwóch rzeczy:** audytu integralności i oceny końcowej. Żadnego fitu, HPO,
    wyboru epoki, progu ani doboru promptu na teście. TF-IDF dopasowany wyłącznie na train.
-4. **Zamrożenie konfiguracji** na walidacji, potem *opcjonalny* refit na całych 10 003 z ustaloną
-   z góry liczbą epok — tylko takie wyniki zestawiamy z kolumną *Full* w literaturze. Jeśli refitu
-   nie robimy, jawnie raportujemy mniejszy budżet danych.
+4. **Refit — decyzja 14.10.2026:** trzy zamrożone konfiguracje uczone od nowa na całych
+   10 003 zdaniach (train + dawna walidacja). DistilBERT: harmonogram na 5 epok, stop po 4.
+   Po reficie brak niezależnej walidacji. Porównanie z *Full*: accuracy na pełnym teście 3 080,
+   z uwzględnieniem różnic strojenia i jednego seeda.
 5. **Metryki:** `accuracy` — główna, do porównania z literaturą; **macro-F1 — metryka wyboru
    checkpointu/konfiguracji na walidacji (ustalone z góry)**; recall i F1 per klasa; macierz
    pomyłek. Przy jednym seedzie nie wyciągamy wniosków z różnic o ułamek punktu procentowego.
@@ -77,6 +78,16 @@ w configu); skrypt audytu trafi do repo w W1 (`notebooks/` lub `scripts/`), nota
    (5 na klasę) wybranych z góry** — te same 385 dla wszystkich modeli w tabeli; raport jakości,
    błędów formatu, tokenów, latencji i kosztu. Dobór promptu tylko na walidacji. **Ekspozycja LLM
    na benchmark nieustalona** — brak gwarancji czystego testu; wynik nie dowodzi generalizacji.
+
+**Zamrożenie — 14.10.2026, przed pierwszym wynikiem na teście:**
+
+- TF-IDF+LR: próba #12; MiniLM+kNN: k = 1, `uniform`, cosinus;
+  DistilBERT: LR 6e-5, epoka 4 przy harmonogramie na 5 epok, `max_len=128`.
+- Pełne parametry: `models.<nazwa>.frozen` i baza w configu; przypięte rewizje wag, seed 42.
+  Bez nowego HPO i zmian konfiguracji po wyniku testowym.
+- Kolejność: commit z tym wpisem i [ADR-0002](docs/adr/0002-protokol-ewaluacji.md)
+  → tag `experiments-frozen` na tym commicie → refit → jednorazowa ocena na teście.
+- Artefakty W2 zachowane; finalne w `models/final/`. Koszty finalnych modeli mierzone ponownie.
 
 **Punkty odniesienia (protokół Full, pełny train i test):** DistilBERT-base **92,1%**
 (Qi i in. 2021: batch 32, max_len 128, AdamW wd 0,01, warmup 10% do LR 4e-5, 5 epok);
@@ -298,9 +309,8 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
       strażnik protokołu (`tests/test_contract.py`) i `scripts/fetch_data.py` w repo
 - [x] **ADR-0001 — zmiana tematu na BANKING77**: zaakceptowany 9.10 (kontekst i opcje zestawione
       z notatek researchu; sekcje *Decyzja* i *Konsekwencje* — autor)
-- [ ] **ADR-0002 — protokół ewaluacji** (grupowany split, grupa konfliktowa, mapa etykiet,
-      podzbiory testowe; decyzje autora z 4.10) — autor; nie zmieścił się w wieczorach 5–9.10,
-      przeniesiony na weekend 10–11.10
+- [x] **[ADR-0002 — protokół ewaluacji](docs/adr/0002-protokol-ewaluacji.md)** — zaakceptowany 14.10:
+      grupowany split, grupa konfliktowa, mapa etykiet, podzbiory testowe i refit na 10 003.
 - [x] **W1** (pt 2.10 wieczór + weekend 3–4.10; twarde minimum domknięte w wieczory 5–9.10):
   - [x] dane pobrane i zweryfikowane (`scripts/fetch_data.py`: SHA-256, 10 003 / 3 080 wierszy)
   - [x] loader z walidacją struktury (`data/loader.py`) + testy na sztucznych CSV
@@ -328,7 +338,7 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
       `pygeohash`; dodany extra `serving` (`fastapi`, `uvicorn[standard]`, `httpx` — wymagany przez
       `TestClient`); `optuna` zostaje do decyzji przy HPO w W2 (Optuna czy siatka)
 - [x] **W2** (plan 10–11.10, realizacja 12–14.10): trzy ścieżki + HPO + pomiary CPU + API
-  z baseline'em — **zamknięty 14.10, bramka zielona**; ADR-0002 i decyzja o refit przed testem (W3)
+  z baseline'em — **zamknięty 14.10, bramka zielona**; ADR-0002 i decyzja o reficie zapisane 14.10 (W3)
   - [x] HPO TF-IDF+LR (12.10): Optuna TPE, 16 prób na walidacji, wybór po macro-F1 (remis → mniej
     cech); zamrożona próba #12 w `models.tfidf_lr.frozen`
   - [x] MiniLM+kNN (12.10): embeddingi z przypiętej rewizji (cache), siatka k {1, 3, 5, 10} ×
@@ -350,6 +360,8 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     Czas zabrały też problemy środowiska: czerwone CI po imporcie `sentence-transformers`,
     brak `accelerate`, zmiany API w `transformers` 5 i puste `CUDA_VISIBLE_DEVICES` na Windows.
 - [ ] W3 (17–18.10): zamrożenie, ocena końcowa, analiza błędów, artefakt, testy, Docker
+  - [x] 14.10: decyzja o reficie trzech ścieżek na 10 003 i zapis zamrożonych konfiguracji.
+  - [ ] Tag `experiments-frozen`, refit i pomiary finalnych artefaktów; potem ocena na teście.
 - [ ] W4 (24–25.10): kind + workflow CI + test HTTP + odtworzenie z instrukcji
 - [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
 - [ ] gitleaks + LICENSE → upublicznienie repo (najpóźniej przy wysyłce)
@@ -437,7 +449,8 @@ klas: `virtual_card_not_working` ma najniższe F1 (50,0%) i recall (33,3%) przy 
 model wskazał tę klasę dwukrotnie, oba razy trafnie, ale pozostałe cztery przykłady przypisał
 innym klasom; przy sześciu przykładach jedna pomyłka zmienia recall o 16,7 punktu procentowego.
 
-**Tabela końcowa** (W3, test dotknięty raz; koszt z W2; wszystkie liczby z MLflow / wykonanego kodu):
+**Tabela końcowa** (W3, test dotknięty raz; koszt finalnych artefaktów po reficie;
+wszystkie liczby z MLflow / wykonanego kodu):
 
 | Model | Acc (test 3 080) | Acc (3 055) | Macro-F1 | Czas treningu | Artefakt | Latencja CPU p50/p95 |
 |---|---:|---:|---:|---:|---:|---:|
