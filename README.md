@@ -327,7 +327,8 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
 - [x] **2.10 — zależności pod BANKING77**: z zależności głównych usunięte `xgboost`, `duckdb`,
       `pygeohash`; dodany extra `serving` (`fastapi`, `uvicorn[standard]`, `httpx` — wymagany przez
       `TestClient`); `optuna` zostaje do decyzji przy HPO w W2 (Optuna czy siatka)
-- [ ] W2 (plan 10–11.10, realizacja 12–14.10): trzy ścieżki + HPO + pomiary CPU + API z baseline'em
+- [x] **W2** (plan 10–11.10, realizacja 12–14.10): trzy ścieżki + HPO + pomiary CPU + API
+  z baseline'em — **zamknięty 14.10, bramka zielona**; ADR-0002 i decyzja o refit przed testem (W3)
   - [x] HPO TF-IDF+LR (12.10): Optuna TPE, 16 prób na walidacji, wybór po macro-F1 (remis → mniej
     cech); zamrożona próba #12 w `models.tfidf_lr.frozen`
   - [x] MiniLM+kNN (12.10): embeddingi z przypiętej rewizji (cache), siatka k {1, 3, 5, 10} ×
