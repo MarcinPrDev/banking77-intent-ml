@@ -22,7 +22,7 @@ skille, hub w Obsidianie.
 
 ## Czego zmiana nie dotyka
 
-- Historia gita: commity do `60e628c` włącznie używają starej nazwy pakietu — to jest historia,
+- Historia gita: commity do `10fe9e3` włącznie używają starej nazwy pakietu — to jest historia,
   nie błąd. ADR-0001 opisuje temat, nie nazwę repo.
 - Siostrzane repo `us-accidents-etl` (Spark ETL, CI/CD) — zostaje pod swoją nazwą.
 - Zmienna środowiskowa `BANKING77_CONFIG` i klucze `configs/config.yaml`.

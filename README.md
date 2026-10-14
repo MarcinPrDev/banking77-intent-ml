@@ -368,7 +368,7 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
 - [x] **2.10 — zmiana nazwy** repo, pakietu i folderu na `banking77-intent-ml` /
       `banking77_intent_ml` (`docs/RENAME.md`)
 - [x] **2.10 — porządki po poprzednim temacie**: notebook EDA, `csv_to_parquet.py`, `sanity_w1.py`
-      i loader US Accidents usunięte z repo (treść w historii gita do commita `5c94e05`; kopie
+      i loader US Accidents usunięte z repo (treść w historii gita do commita `bc20003`; kopie
       robocze i dane poza repo). Loader BANKING77 i nowy `notebooks/01_eda.ipynb` powstają w W1
 - Rezerwa: zużyto **8 z 8 h** (stan po W1, 9.10: W1 zajął 20 h przy budżecie 12 h; kolejne
   nadwyżki = świadome nadgodziny albo cięcie wg kolejności z *Bramka po W1 i fallback*;
@@ -410,7 +410,7 @@ nie jest to porównanie pełnych możliwości modeli.
 **Ograniczenie DistilBERT:** zwycięskie LR 6e-5 leży na brzegu siatki, a macro-F1 dla LR
 2e-5–4e-5 nadal rosło w 5. epoce, więc ten budżet nie wyczerpuje możliwości modelu.
 
-**Koszt na CPU** (W2, pomiar `cpu_cost_w2` z 14.10, kod z commita `815d9b7`; batch=1 przez
+**Koszt na CPU** (W2, pomiar `cpu_cost_w2` z 14.10, kod z commita `aa210d7`; batch=1 przez
 wspólny interfejs predyktora, tylko CPU; liczby z MLflow):
 
 | Ścieżka | Wątki | Latencja p50 | Latencja p95 | Zimny start: mediana (max) | Artefakt | Run MLflow |
@@ -458,6 +458,22 @@ wszystkie liczby z MLflow / wykonanego kodu):
 | TF-IDF + LR | do zmierzenia | | | | | |
 | MiniLM + kNN | do zmierzenia | | | | | |
 | DistilBERT | do zmierzenia | | | | | |
+
+**Interpretacja oceny końcowej (14.10, refit na 10 003):**
+
+- DistilBERT najlepszy w tym przebiegu: accuracy 93,02%, macro-F1 93,05%.
+  Przewaga accuracy: 0,97 p.p. nad MiniLM+kNN i 2,21 p.p. nad TF-IDF+LR.
+- Protokół Full: accuracy o 0,92 p.p. wyższe niż DistilBERT u Qi i in. (92,1%)
+  i o 0,28 p.p. niższe niż BERT-base (93,3%). Inny LR, liczba epok i jeden seed;
+  bez wniosku o powtarzalnej przewadze nad wynikiem z publikacji.
+- Na walidacji prowadził MiniLM+kNN, na teście DistilBERT. Inny zbiór oceny i więcej danych
+  treningowych po reficie; brak podstaw do przypisania zmiany rankingu samemu refitowi.
+- Po wyłączeniu 25 nakładek: spadek accuracy najwyżej o 0,06 p.p., ranking bez zmian.
+  Mały wpływ wykrytego pokrycia train/test na wynik ogólny.
+
+Źródło: runy `fb0d0bde`, `04ec980a`, `0c08edb4` z commita `6cae45d`; jedna ocena na ścieżkę.
+Wyniki na 385 przykładach pozostają w MLflow, do raportu razem z LLM.
+Wybór do wdrożenia: jakość razem z kosztami finalnych artefaktów. Konfiguracje bez dalszego strojenia.
 
 ## Dalsze prace
 

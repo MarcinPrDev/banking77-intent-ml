@@ -11,7 +11,7 @@
 > weryfikacja porównania (notatka 06)). Liczby oznaczone „obliczenia soczewek researchu"
 > policzyli agenci researchu (Claude) na lokalnym parquecie US Accidents — skrypty nierecenzowane,
 > zarchiwizowane w `P:\Repos\us-accidents-audit\`. Własne pomiary autora z 28.09: rozkład klas
-> i wolumen rok × źródło (skrypt `scripts/sanity_w1.py` — w historii gita do commita `5c94e05`,
+> i wolumen rok × źródło (skrypt `scripts/sanity_w1.py` — w historii gita do commita `bc20003`,
 > kopia robocza w `P:\Repos\us-accidents-audit\repo-leftovers\`).
 > Sekcje „Decyzja" i „Konsekwencje" uzupełniono 9.10.2026 o ustalenia i wyniki z W1.
 
