@@ -452,12 +452,21 @@ innym klasom; przy sześciu przykładach jedna pomyłka zmienia recall o 16,7 pu
 **Tabela końcowa** (W3, test dotknięty raz; koszt finalnych artefaktów po reficie;
 wszystkie liczby z MLflow / wykonanego kodu):
 
-| Model | Acc (test 3 080) | Acc (3 055) | Macro-F1 | Czas treningu | Artefakt | Latencja CPU p50/p95 |
-|---|---:|---:|---:|---:|---:|---:|
-| Dummy | 1,30% (arytmetyka) | — | — | 0 | — | — |
-| TF-IDF + LR | do zmierzenia | | | | | |
-| MiniLM + kNN | do zmierzenia | | | | | |
-| DistilBERT | do zmierzenia | | | | | |
+| Model | Acc (test 3 080) | Acc (3 055) | Macro-F1 (3 080) | Czas treningu (10 003) | Artefakt | Latencja CPU p50 / p95 | Zimny start (1 w. / 8 w.) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Dummy | 1,30% (arytmetyka) | — | — | 0 | — | — | — |
+| TF-IDF + LR | 90,81% | 90,77% | 90,83% | 4,9 s (CPU) | 5,2 MB | 0,28 / 0,43 ms (1 w.) · 0,27 / 0,42 ms (8 w.) | 0,85 s / 0,85 s |
+| MiniLM + kNN | 92,05% | 92,01% | 92,03% | 3,0 s (GPU) | 107,0 MB | 12,16 / 16,83 ms (1 w.) · 9,26 / 10,89 ms (8 w.) | 4,69 s / 4,69 s |
+| DistilBERT | 93,02% | 92,96% | 93,05% | 25,5 s (GPU) | 268,8 MB | 17,48 / 31,42 ms (1 w.) · 8,22 / 11,45 ms (8 w.) | 3,30 s / 3,19 s |
+
+Źródła (MLflow): ocena końcowa — runy `0c08edb4`, `04ec980a`, `fb0d0bde` (`split=test`,
+commit `6cae45d`); refit na 10 003 — runy `f7e23471`, `4509d9d4`, `5b883a97` (`final_refit`,
+commit `d809c57` = tag `experiments-frozen`); koszt — badanie `cpu_cost_final`, po dwa runy
+na ścieżkę (1 i 8 wątków: `4e0fe1ce`/`9b7c4505`, `a8276f36`/`bea6c48a`, `56a7fbb4`/`0ec07580`),
+metodyka jak w tabeli *Koszt na CPU*. Runy zapisały hashe commitów sprzed przepisania historii
+14.10; odpowiedniki — artefakt `provenance/git-commit-map-2026-10-14.json` w każdym runie.
+Czas treningu = `fit` adaptera na 10 003 zdaniach z wczytaniem wag lub enkodera (GPU: RTX 5080).
+Artefakt MiniLM + kNN = indeks 10 003 wektorów + wagi enkodera z cache Hugging Face.
 
 **Interpretacja oceny końcowej (14.10, refit na 10 003):**
 
