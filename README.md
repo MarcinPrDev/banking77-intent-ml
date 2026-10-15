@@ -484,6 +484,14 @@ Artefakt MiniLM + kNN = indeks 10 003 wektorów + wagi enkodera z cache Hugging 
 Wyniki na 385 przykładach pozostają w MLflow, do raportu razem z LLM.
 Wybór do wdrożenia: jakość razem z kosztami finalnych artefaktów. Konfiguracje bez dalszego strojenia.
 
+## Analiza błędów (W3)
+
+Notebook: [`notebooks/02_analiza_bledow.ipynb`](notebooks/02_analiza_bledow.ipynb) — najczęstsze pary
+pomyłek i recall per klasa z oceny końcowej (same agregaty, bez czytania zdań testowych), porównanie
+błędów trzech ścieżek po `row_id`, przegląd 20 błędów modeli W2 na walidacji; etykiety bez zmian.
+
+TODO-Marcin: wnioski (komórka „Wnioski” w notebooku).
+
 ## Dalsze prace
 
 Po oddaniu projektu (decyzja C z 13.10):
