@@ -490,7 +490,14 @@ Notebook: [`notebooks/02_analiza_bledow.ipynb`](notebooks/02_analiza_bledow.ipyn
 pomyłek i recall per klasa z oceny końcowej (same agregaty, bez czytania zdań testowych), porównanie
 błędów trzech ścieżek po `row_id`, przegląd 20 błędów modeli W2 na walidacji; etykiety bez zmian.
 
-TODO-Marcin: wnioski (komórka „Wnioski” w notebooku).
+Główna trudność to rozróżnianie bliskich intencji. Krótkie zdania często nie zawierają
+wystarczającego kontekstu.
+
+Modele semantyczne poprawiają wynik ogólny względem TF-IDF. Nadal potrafią jednak skupić się
+na pobocznym fragmencie zdania.
+
+DistilBERT popełnia najmniej błędów. Wysoki score nie gwarantuje poprawności, a score kNN
+przy k równym 1 nie informuje o pewności odpowiedzi.
 
 ## Dalsze prace
 
