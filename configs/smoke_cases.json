@@ -1,0 +1,105 @@
+{
+  "model": "distilbert",
+  "model_version": "distilbert-v1",
+  "score_tolerance": 0.0001,
+  "cases": [
+    {
+      "text": "My new card still hasn't arrived, when will it come?",
+      "intent_id": 12,
+      "intent": "card_arrival",
+      "score": 0.9861456751823425,
+      "margin": 0.9819695353507996
+    },
+    {
+      "text": "What exchange rate will I get if I pay in euros?",
+      "intent_id": 33,
+      "intent": "exchange_rate",
+      "score": 0.8856156468391418,
+      "margin": 0.7963002920150757
+    },
+    {
+      "text": "My top up didn't go through, what happened?",
+      "intent_id": 59,
+      "intent": "top_up_failed",
+      "score": 0.9454178810119629,
+      "margin": 0.9059109687805176
+    },
+    {
+      "text": "I want to close my account for good.",
+      "intent_id": 55,
+      "intent": "terminate_account",
+      "score": 0.9919956922531128,
+      "margin": 0.9911871552467346
+    },
+    {
+      "text": "Someone stole my card, please block it right away.",
+      "intent_id": 42,
+      "intent": "lost_or_stolen_card",
+      "score": 0.6754381656646729,
+      "margin": 0.549946665763855
+    },
+    {
+      "text": "How do I change the PIN on my card?",
+      "intent_id": 22,
+      "intent": "change_pin",
+      "score": 0.9906530380249023,
+      "margin": 0.9895572662353516
+    },
+    {
+      "text": "I was charged twice for the same purchase.",
+      "intent_id": 63,
+      "intent": "transaction_charged_twice",
+      "score": 0.993235170841217,
+      "margin": 0.9922300577163696
+    },
+    {
+      "text": "Why is my bank transfer still pending?",
+      "intent_id": 6,
+      "intent": "balance_not_updated_after_bank_transfer",
+      "score": 0.7540085315704346,
+      "margin": 0.5356624126434326
+    },
+    {
+      "text": "I'd like a refund for the item I bought.",
+      "intent_id": 52,
+      "intent": "request_refund",
+      "score": 0.9945111274719238,
+      "margin": 0.9926169514656067
+    },
+    {
+      "text": "Is there a fee for withdrawing cash abroad?",
+      "intent_id": 76,
+      "intent": "wrong_exchange_rate_for_cash_withdrawal",
+      "score": 0.6680065393447876,
+      "margin": 0.5541717410087585
+    },
+    {
+      "text": "Why do you need to verify my identity?",
+      "intent_id": 74,
+      "intent": "why_verify_identity",
+      "score": 0.9770556688308716,
+      "margin": 0.9712868928909302
+    },
+    {
+      "text": "The ATM swallowed my card.",
+      "intent_id": 19,
+      "intent": "card_swallowed",
+      "score": 0.975734293460846,
+      "margin": 0.9725960493087769
+    },
+    {
+      "text": "Can I get a virtual card for online shopping?",
+      "intent_id": 41,
+      "intent": "getting_virtual_card",
+      "score": 0.6276822090148926,
+      "margin": 0.3144685626029968
+    },
+    {
+      "text": "Which countries are you available in?",
+      "intent_id": 25,
+      "intent": "country_support",
+      "score": 0.9902583360671997,
+      "margin": 0.9891295433044434
+    }
+  ]
+}

@@ -213,3 +213,4 @@ api:
 deploy:                                    # ADR-0003 (15.10.2026) — jedno źródło wersji i ścieżki wdrażanego modelu
   model_version: distilbert-v1             # /health i /predict, build-arg i tag obrazu, tag Release (W4)
   artifact_dir: models/final/distilbert    # oceniony artefakt (refit 5b883a97, ocena fb0d0bde), bez kopiowania
+  smoke_cases: configs/smoke_cases.json    # zdania kontrolne (nie ze zbioru) + oczekiwane wyniki artefaktu; scripts/smoke_api.py --record

@@ -203,6 +203,7 @@ class MlflowConfig:
 class DeployConfig:
     model_version: str  # wersja wdrażanego artefaktu: /health, tag obrazu, tag Release (ADR-0003)
     artifact_dir: Path  # katalog artefaktu serwowanego przez API
+    smoke_cases: Path  # zdania kontrolne i oczekiwane wyniki artefaktu (scripts/smoke_api.py)
 
 
 @dataclass(frozen=True)
@@ -365,5 +366,6 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         deploy=DeployConfig(
             model_version=str(raw["deploy"]["model_version"]),
             artifact_dir=_abs(raw["deploy"]["artifact_dir"]),
+            smoke_cases=_abs(raw["deploy"]["smoke_cases"]),
         ),
     )
