@@ -5,11 +5,12 @@ Decyzje autora (13.10.2026): żądanie = jeden tekst `{"text": ...}`; odpowiedź
 `api.max_text_chars` -> 422 (spacje na brzegach obcinane przed sprawdzeniem długości).
 `score` = wynik modelu dla zwróconej klasy z `predict_proba` — jedno wywołanie modelu, bo kontrakt
 gwarantuje `predict` == argmax `predict_proba`; to nie skalibrowane prawdopodobieństwo.
-Predyktor i mapa etykiet ładowane raz, na starcie (lifespan); wersja modelu ze zmiennej
-środowiskowej `api.model_version_env`.
+Predyktor i mapa etykiet ładowane raz, na starcie (lifespan). Artefakt z `deploy.artifact_dir`
+(ADR-0003: DistilBERT po reficie, oceniony na teście); wersja modelu ze zmiennej środowiskowej
+`api.model_version_env` (w obrazie), a bez niej z `deploy.model_version` — jedno źródło wersji.
 
-Uruchomienie lokalne (artefakt w `paths.models_dir/<api.model>`):
-`uv run uvicorn banking77_intent_ml.api.app:create_app --factory --port 8000`
+Uruchomienie lokalne (port 8000 na tej maszynie zarezerwowany przez Windows):
+`uv run uvicorn banking77_intent_ml.api.app:create_app --factory --port 8080`
 
 Bez `from __future__ import annotations`: FastAPI czyta adnotacje endpointów w czasie działania,
 a model żądania powstaje w `create_app` z limitem długości z configu.
@@ -18,6 +19,7 @@ a model żądania powstaje w `create_app` z limitem długości z configu.
 import os
 from collections.abc import Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI
@@ -27,8 +29,6 @@ from banking77_intent_ml.config import Settings, load_settings
 from banking77_intent_ml.data.labels import LabelMap
 from banking77_intent_ml.models.factory import load_predictor
 from banking77_intent_ml.models.predictor import IntentClassifier
-
-UNKNOWN_VERSION = "unknown"  # zmienna `api.model_version_env` nieustawiona (np. lokalnie)
 
 
 class PredictResponse(BaseModel):
@@ -46,9 +46,9 @@ class HealthResponse(BaseModel):
 
 def create_app(
     settings: Settings | None = None,
-    loader: Callable[[str, Settings], IntentClassifier] = load_predictor,
+    loader: Callable[[str, Settings, Path], IntentClassifier] = load_predictor,
 ) -> FastAPI:
-    """Aplikacja serwująca `api.model`; `loader` podmieniany w testach (atrapa predyktora)."""
+    """Aplikacja serwująca `api.model` z `deploy.artifact_dir`; `loader` podmieniany w testach."""
     settings = settings or load_settings()
     cfg = settings.api
     text_type = Annotated[
@@ -58,9 +58,11 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        app.state.predictor = loader(cfg.model, settings)
+        app.state.predictor = loader(cfg.model, settings, settings.deploy.artifact_dir)
         app.state.labels = LabelMap.from_settings(settings)
-        app.state.model_version = os.environ.get(cfg.model_version_env, UNKNOWN_VERSION)
+        app.state.model_version = (
+            os.environ.get(cfg.model_version_env) or settings.deploy.model_version
+        )
         yield
 
     app = FastAPI(title="BANKING77 intent API", lifespan=lifespan)

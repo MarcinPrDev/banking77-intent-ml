@@ -204,8 +204,12 @@ mlflow:
   experiment: banking77-intent
 
 api:
-  model: tfidf_lr                          # strategia z models.factory.STRATEGIES, artefakt w paths.models_dir/<model>; baseline W2, model docelowy w W3
+  model: distilbert                        # strategia z models.factory.STRATEGIES; ADR-0003 (15.10): DistilBERT, artefakt z deploy.artifact_dir
   max_text_chars: 500                      # decyzja autora 13.10: max w train+val 433 znaki (p99 220); dłuższy, pusty lub same spacje -> 422
-  model_version_env: MODEL_VERSION         # wersja artefaktu wpieczonego w obraz; zwracana w /health i /predict
+  model_version_env: MODEL_VERSION         # nadpisuje deploy.model_version (w obrazie z build-arg); zwracana w /health i /predict
   host: 0.0.0.0
   port: 8000
+
+deploy:                                    # ADR-0003 (15.10.2026) — jedno źródło wersji i ścieżki wdrażanego modelu
+  model_version: distilbert-v1             # /health i /predict, build-arg i tag obrazu, tag Release (W4)
+  artifact_dir: models/final/distilbert    # oceniony artefakt (refit 5b883a97, ocena fb0d0bde), bez kopiowania

@@ -15,9 +15,10 @@ pytest.importorskip("httpx")  # wymagany przez TestClient
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from banking77_intent_ml.api.app import UNKNOWN_VERSION, create_app  # noqa: E402
+from banking77_intent_ml.api.app import create_app  # noqa: E402
 from banking77_intent_ml.config import load_settings  # noqa: E402
 from banking77_intent_ml.data.labels import LabelMap  # noqa: E402
+from banking77_intent_ml.models.factory import STRATEGIES  # noqa: E402
 from banking77_intent_ml.models.predictor import IntentClassifier  # noqa: E402
 
 _WINNER = 11  # id klasy, którą atrapa zawsze wskazuje
@@ -60,8 +61,8 @@ def api(monkeypatch):
     settings = load_settings()
     loads = []
 
-    def loader(name, settings):
-        loads.append(name)
+    def loader(name, settings, directory):
+        loads.append((name, directory))
         return _FakePredictor(settings)
 
     monkeypatch.setenv(settings.api.model_version_env, "test-1")
@@ -102,7 +103,7 @@ def test_predictor_is_loaded_once(api):
     for _ in range(3):
         assert client.post("/predict", json={"text": "top up failed"}).status_code == 200
 
-    assert loads == [settings.api.model]
+    assert loads == [(settings.api.model, settings.deploy.artifact_dir)]
 
 
 def test_text_at_limit_is_accepted_after_strip(api):
@@ -127,10 +128,19 @@ def test_invalid_text_is_rejected(api, payload):
     assert client.app.state.predictor.seen == []  # model nie był wołany
 
 
-def test_version_falls_back_without_env(monkeypatch):
+def test_version_falls_back_to_deploy_config_without_env(monkeypatch):
     settings = load_settings()
     monkeypatch.delenv(settings.api.model_version_env, raising=False)
-    app = create_app(settings, loader=lambda name, settings: _FakePredictor(settings))
+    app = create_app(settings, loader=lambda name, s, directory: _FakePredictor(s))
 
     with TestClient(app) as client:
-        assert client.get("/health").json()["model_version"] == UNKNOWN_VERSION
+        assert client.get("/health").json()["model_version"] == settings.deploy.model_version
+
+
+def test_deploy_config_serves_evaluated_artifact_of_api_model():
+    """ADR-0003: API serwuje oceniony artefakt z refitu — katalog = strategia `api.model`."""
+    settings = load_settings()
+
+    assert settings.api.model in STRATEGIES
+    assert settings.deploy.artifact_dir == settings.paths.final_models_dir / settings.api.model
+    assert settings.deploy.model_version

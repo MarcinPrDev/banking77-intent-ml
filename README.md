@@ -157,24 +157,24 @@ Nazwy klas są robocze — ostateczne nazewnictwo i podział na moduły to decyz
 
 **MLflow** (lokalnie, poza gitem: baza `mlflow.db` z runami + artefakty w `mlruns/`; podgląd:
 `uv run mlflow ui --backend-store-uri sqlite:///mlflow.db`) = tracking wszystkich runów: parametry, metryki na walidacji,
-czas treningu, rozmiar artefaktu. Po zamrożeniu eksperymentów (W3) **jeden wybrany model**
-trafia do `models/<nazwa>/<wersja>/` z manifestem (sha256 plików, wersje bibliotek, metryki
-walidacyjne, data). Wersja wybranego artefaktu trafi do configu w W3 (sekcja `deploy`:
-`model_version`, `artifact_dir`) — jedno źródło dla build-arg obrazu, tagu, manifestu k8s
-i odpowiedzi `/health` (`MODEL_VERSION`).
+czas treningu, rozmiar artefaktu. **Wybrany model (ADR-0003, 15.10): DistilBERT** — oceniony
+artefakt z refitu w `models/final/distilbert`, bez kopiowania. Sekcja `deploy` w configu
+(`model_version: distilbert-v1`, `artifact_dir`) — jedno źródło dla build-arg obrazu, tagu,
+manifestu k8s i odpowiedzi `/health` (`MODEL_VERSION`; bez tej zmiennej API zwraca
+`deploy.model_version`). Manifest z hashami plików powstaje przy pakowaniu do Release (W4).
 Artefakt jest **wpiekany w obraz CPU podczas `docker build`** (bez pobierania na starcie
 kontenera — brak cold startu i uprawnień runtime). Tag obrazu zawiera wersję modelu.
 
-**Otwarte (decyzja autora w W3):** skąd CI bierze artefakt do `docker build` — (a) GitHub Release
-asset przypięty tagiem + sha256 w configu, (b) trening lekkiego modelu w CI z danych pobranych
-przez `fetch_data.py --only train` (bez `test.csv`; działa tylko dla TF-IDF; manifest splitu niesie tylko hash, więc w CI trzeba
-odtworzyć podział `make_splits` i porównać hash z manifestem — albo refitować na całych 10 003 bez
-podziału), (c) GCS (tylko jeśli GCP wejdzie jako stretch). Decyzja jest częścią ADR wyboru
-artefaktu w W3 — W4 tylko ją implementuje.
-Jeśli wygra MiniLM+kNN albo DistilBERT, obraz musi mieć torch CPU — rozmiar i czas budowy
-**do zmierzenia**.
+**Skąd CI bierze artefakt do `docker build` — rozstrzygnięte w ADR-0003: opcja (a)**, GitHub
+Release asset przypięty tagiem (`deploy.model_version`) + sha256 w configu; pliki bit w bit
+zgodne z ocenionym artefaktem. Rozważane były też: (b) trening lekkiego modelu w CI z danych
+pobranych przez `fetch_data.py --only train` (bez `test.csv`; działa tylko dla TF-IDF; manifest
+splitu niesie tylko hash, więc w CI trzeba odtworzyć podział `make_splits` i porównać hash
+z manifestem — albo refitować na całych 10 003 bez podziału) — odrzucone, bo tworzy nowy
+artefakt; (c) GCS (tylko jeśli GCP wejdzie jako stretch) — odrzucone. W4 implementuje (a).
+Wybrany DistilBERT wymaga torcha CPU w obrazie — rozmiar i czas budowy **do zmierzenia**.
 
-**MiniLM+kNN — do decyzji w W3:** adapter zapisuje indeks kNN i metadane, a wagi enkodera
+**MiniLM+kNN (niewybrany w ADR-0003; opis zostaje dla porządku):** adapter zapisuje indeks kNN i metadane, a wagi enkodera
 z przypiętej rewizji pozostają w cache Hugging Face. Obraz musi zawierać również enkoder:
 do wyboru wpieczenie cache HF albo zapis enkodera wewnątrz artefaktu. W tabeli kosztów
 rozmiar obejmuje **indeks kNN + wagi, tokenizer i konfigurację enkodera**. `load()` rozgrzewa
