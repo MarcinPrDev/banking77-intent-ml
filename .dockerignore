@@ -1,0 +1,11 @@
+# Kontekst budowy = lista dozwolonych plików (W3): tylko to, czego potrzebuje obraz serwujący.
+# Poza kontekstem zostają m.in. dane/, mlruns/, mlflow.db, .venv/, notebooks/, artefakty W2.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!src/
+!configs/
+!models/final/distilbert/
+**/__pycache__
+**/*.pyc

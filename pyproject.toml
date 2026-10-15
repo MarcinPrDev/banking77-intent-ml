@@ -40,11 +40,26 @@ gpu = [
     "transformers>=4.44",
 ]
 # API (od W2): FastAPI + uvicorn; httpx jest wymagany przez TestClient. Bez torcha — obraz Docker
-# z modelem wymagającym torcha dostanie osobny extra z indeksem CPU (decyzja w W3).
+# z modelem wymagającym torcha dostaje extra `cpu` (ADR-0003: DistilBERT).
 serving = [
     "fastapi>=0.139.0",
     "httpx>=0.28.1",
     "uvicorn[standard]>=0.49.0",
+]
+# Obraz serwujący (W3, ADR-0003): torch z indeksu CPU — bez CUDA i pakietów nvidia-* (koło z PyPI
+# na Linuksie zawiera CUDA). Rozłączny z `gpu` ([tool.uv] conflicts); w obrazie:
+# uv sync --frozen --no-dev --extra serving --extra cpu
+cpu = [
+    "torch==2.11.0",                     # ta sama wersja co trening i ocena na teście (2.11.0+cu128)
+    "transformers>=4.44",
+]
+
+[tool.uv]
+conflicts = [
+    [
+        { extra = "gpu" },
+        { extra = "cpu" },
+    ],
 ]
 
 [[tool.uv.index]]
@@ -52,8 +67,16 @@ name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.uv.sources]
-torch = { index = "pytorch-cu128" }
+torch = [
+    { index = "pytorch-cu128", extra = "gpu" },
+    { index = "pytorch-cpu", extra = "cpu" },
+]
 
 [build-system]
 requires = ["setuptools>=69"]
