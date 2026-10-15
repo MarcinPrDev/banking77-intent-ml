@@ -201,8 +201,24 @@ uv run ruff check .
 # + GROQ_API_KEY w .env (poza gitem)
 ```
 
-Od W2: `uv run uvicorn ...` z modelem baseline; od W3: `docker build` + `docker run` z testem
-`/health`; od W4: `kind` + workflow w GitHub Actions odtwarzalny z instrukcji w `docs/`.
+**API lokalnie** — serwuje model z `deploy.artifact_dir` (ADR-0003: DistilBERT); port 8000 bywa
+na Windows zarezerwowany przez system, stąd 8080; dokumentacja endpointów: `http://localhost:8080/docs`.
+
+```bash
+uv run uvicorn banking77_intent_ml.api.app:create_app --factory --port 8080
+```
+
+**Obraz Docker CPU** (W3) — wymaga artefaktu `models/final/distilbert` (refit:
+`uv run python scripts/refit_final.py`; w W4 artefakt z GitHub Release); `MODEL_VERSION` =
+`deploy.model_version` z configu:
+
+```bash
+docker build --build-arg MODEL_VERSION=distilbert-v1 -t banking77-intent-api:distilbert-v1 .
+docker run --rm -p 8080:8000 banking77-intent-api:distilbert-v1
+curl http://localhost:8080/health
+```
+
+Od W4: `kind` + workflow w GitHub Actions odtwarzalny z instrukcji w `docs/`.
 
 ## Plan — 5 slotów, 60 h (30.09 → 31.10.2026)
 
@@ -359,7 +375,23 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
   - Co nie zadziałało: weekend 10–11.10 bez pracy, więc W2 przesunął się na 12–14.10.
     Czas zabrały też problemy środowiska: czerwone CI po imporcie `sentence-transformers`,
     brak `accelerate`, zmiany API w `transformers` 5 i puste `CUDA_VISIBLE_DEVICES` na Windows.
-- [ ] W3 (17–18.10): zamrożenie, ocena końcowa, analiza błędów, artefakt, testy, Docker
+- [ ] W3 (plan 12–18.10, realizacja od 14.10): zamrożenie, ocena końcowa, analiza błędów,
+  artefakt, testy, Docker
+  - [x] Zamrożenie (14.10): ADR-0002 (protokół z W1 + refit przed testem), tag
+    `experiments-frozen` na `d809c57`
+  - [x] Refit na 10 003 (14.10): runy `final_refit`, artefakty w `models/final/`; koszt
+    finalnych artefaktów — badanie `cpu_cost_final`
+  - [x] Ocena końcowa na teście — raz (14.10): tabela końcowa i interpretacja niżej
+  - [x] Analiza błędów (15.10): notebook 02, wnioski w sekcji *Analiza błędów (W3)*
+  - [x] ADR-0003 (15.10): wdrażamy DistilBERT; model w CI z GitHub Release (opcja a); sekcja
+    `deploy` w configu (`distilbert-v1`, `models/final/distilbert`)
+  - [x] Obraz Docker CPU (15.10): `banking77-intent-api:distilbert-v1`, **3,18 GB** (`.venv`
+    1,9 GB — torch CPU 750 MB, pyarrow 153 MB, scipy 113 MB, transformers 112 MB; model 257 MiB);
+    torch 2.11.0+cpu (`torch.version.cuda` = None, brak pakietów `nvidia-*`); model ładuje się
+    bez sieci; gotowość 3,5 s od `docker run`; RAM 391 MiB; test przeniesienia: te same id
+    w 50/50, |Δ score| ≤ 3e-07. Zależności główne (mlflow, optuna, matplotlib, seaborn,
+    pyarrow) zostają w obrazie — decyzja autora 15.10, rozmiar zmierzony
+  - [ ] Testy W3 §1.5 (uzupełnienie) i `scripts/smoke_api.py`
   - [x] 14.10: decyzja o reficie trzech ścieżek na 10 003 i zapis zamrożonych konfiguracji.
   - [ ] Tag `experiments-frozen`, refit i pomiary finalnych artefaktów; potem ocena na teście.
 - [ ] W4 (24–25.10): kind + workflow CI + test HTTP + odtworzenie z instrukcji
