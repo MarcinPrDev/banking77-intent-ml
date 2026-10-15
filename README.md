@@ -215,7 +215,7 @@ uv run uvicorn banking77_intent_ml.api.app:create_app --factory --port 8080
 ```bash
 docker build --build-arg MODEL_VERSION=distilbert-v1 -t banking77-intent-api:distilbert-v1 .
 docker run --rm -p 8080:8000 banking77-intent-api:distilbert-v1
-curl http://localhost:8080/health
+uv run python scripts/smoke_api.py --url http://localhost:8080   # drugi terminal: smoke
 ```
 
 Od W4: `kind` + workflow w GitHub Actions odtwarzalny z instrukcji w `docs/`.
@@ -391,7 +391,11 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     bez sieci; gotowość 3,5 s od `docker run`; RAM 391 MiB; test przeniesienia: te same id
     w 50/50, |Δ score| ≤ 3e-07. Zależności główne (mlflow, optuna, matplotlib, seaborn,
     pyarrow) zostają w obrazie — decyzja autora 15.10, rozmiar zmierzony
-  - [ ] Testy W3 §1.5 (uzupełnienie) i `scripts/smoke_api.py`
+  - [x] `scripts/smoke_api.py` (15.10): `/health` z wersją z configu, 14 zdań kontrolnych
+    (napisanych na potrzeby testu, nie ze zbioru) z oczekiwanymi wynikami ocenionego artefaktu
+    (`configs/smoke_cases.json`), 422 dla pustego tekstu; wobec kontenera: [OK]. Test
+    przeniesienia na dawnej walidacji wykonany jednorazowo (te same id w 50/50)
+  - [ ] Testy W3 §1.5 (uzupełnienie)
   - [x] 14.10: decyzja o reficie trzech ścieżek na 10 003 i zapis zamrożonych konfiguracji.
   - [ ] Tag `experiments-frozen`, refit i pomiary finalnych artefaktów; potem ocena na teście.
 - [ ] W4 (24–25.10): kind + workflow CI + test HTTP + odtworzenie z instrukcji
