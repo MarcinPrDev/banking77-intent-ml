@@ -395,7 +395,13 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     (napisanych na potrzeby testu, nie ze zbioru) z oczekiwanymi wynikami ocenionego artefaktu
     (`configs/smoke_cases.json`), 422 dla pustego tekstu; wobec kontenera: [OK]. Test
     przeniesienia na dawnej walidacji wykonany jednorazowo (te same id w 50/50)
-  - [ ] Testy W3 §1.5 (uzupełnienie)
+  - [x] Testy W3 §1.5 (16.10): mapa etykiet (`test_labels`, strażnik w `test_contract`),
+    walidacja wejścia API — 422 (`test_api`), zapis i odczyt dla trzech adapterów z identycznymi
+    predykcjami (`test_predictor`, test kontraktu), API przez TestClient, smoke (`test_smoke_api`);
+    strażnik protokołu 0,06 s. Zgodność wersji: artefakty sklearn — odczyt odmawia przy innej
+    wersji sklearn (`test_persistence`); DistilBERT — obraz instaluje z tego samego `uv.lock`
+    (transformers 5.13.0, torch 2.11.0), a smoke porównuje wyniki zdań kontrolnych z ocenionym
+    artefaktem (decyzja autora 16.10: bez osobnej kontroli wersji w `load`)
   - [x] 14.10: decyzja o reficie trzech ścieżek na 10 003 i zapis zamrożonych konfiguracji.
   - [ ] Tag `experiments-frozen`, refit i pomiary finalnych artefaktów; potem ocena na teście.
 - [ ] W4 (24–25.10): kind + workflow CI + test HTTP + odtworzenie z instrukcji
