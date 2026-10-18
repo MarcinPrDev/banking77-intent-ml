@@ -260,6 +260,60 @@ Ten sam przebieg w GitHub Actions: `.github/workflows/deploy-kind.yaml` (push na
 request, ręcznie) — pierwszy zielony run na `main`:
 [39138227351](https://github.com/MarcinPrDev/banking77-intent-ml/actions/runs/39138227351).
 
+## Odtworzenie wyników
+
+Quickstart odtwarza **wdrożenie** z ocenionym artefaktem z Release. Ta sekcja odtwarza **liczby**
+z README (walidacja, koszt, test) od zera, w dwóch rozdzielnych przebiegach. Każdy przebieg to
+**osobny klon i nowy magazyn MLflow**: `mlflow.db` i `mlruns/` powstają w katalogu klonu przy
+pierwszym runie. Nie kopiuj ich z innego klonu — blokady budżetu liczą runy w magazynie.
+
+- **A. Zamrożone modele** — konfiguracje z `models.*.frozen` w configu, bez strojenia: wyniki
+  walidacji, refit na 10 003, koszt i **jedna** ocena testowa.
+- **B. Ponowne HPO** — pełne badania W2 na walidacji; sprawdza procedurę wyboru konfiguracji.
+  Nie zmienia configu i nie dotyka testu.
+
+Przygotowanie (A i B): środowisko i dane jak w Quickstart (`--extra gpu` — trening DistilBERT
+wymaga GPU NVIDIA; MiniLM liczy się też na CPU, wolniej). Wagi MiniLM i DistilBERT pobiorą się
+przy pierwszym użyciu z HF Hub, pod rewizjami przypiętymi w configu. Pliki W1 są w gicie — skrypty
+W1 tylko je weryfikują i niczego nie nadpisują:
+
+```bash
+uv run python scripts/make_label_map.py      # mapa etykiet = configs/label_map.json
+uv run python scripts/make_splits.py         # podział train/val = manifest („zgodny”)
+uv run python scripts/make_test_subsets.py   # podzbiory 3 055 / 385 = manifest (same liczby i hashe)
+```
+
+**A. Zamrożone modele** — kolejność obowiązkowa: refit i test dopiero po krokach walidacji.
+
+| Krok | Komenda (`uv run python scripts/…`) | Blokada | Porównaj z |
+|---|---|---|---|
+| A1. Modele bazowe | `train_baselines.py --model dummy`, potem `--model tfidf_lr` | bez `--model` odmowa | *Wyniki na walidacji*: Dummy, TF-IDF + LR (W1) |
+| A2. Zamrożone konfiguracje na train | `export_model.py tfidf_lr`, `minilm_knn`, `distilbert` | istniejący `models/<nazwa>` = odmowa | *Wyniki na walidacji* (accuracy i macro-F1 wypisuje skrypt; bez runu MLflow) |
+| A3. Koszt CPU artefaktów W2 | `measure_cost.py` | badanie `cpu_cost_w2` raz w magazynie | *Koszt na CPU* |
+| A4. Refit na 10 003 | `refit_final.py` | brak tagu `experiments-frozen`, istniejący artefakt albo run refitu = odmowa | runy `final_refit`, artefakty `models/final/` |
+| A5. Koszt finalnych artefaktów | `measure_cost.py --final` | badanie `cpu_cost_final` raz w magazynie | tabela końcowa (koszt) |
+| A6. **Ocena na teście — raz** | `evaluate_test.py` | brak tagu albo `models/final/`, istniejący run `split=test` = odmowa | tabela końcowa (3 080, 3 055) |
+
+Po A6 analiza błędów: `notebooks/02_analiza_bledow.ipynb` (artefakty runów testowych z MLflow
+i predykcje artefaktów W2 z A2 na walidacji). Jedna ocena testowa: drugiego przebiegu A6 w tym
+samym magazynie skrypt nie wykona, a wynik testu nie wraca do kroków A1–A5. Na tym samym sprzęcie
+(RTX 5080) ścieżki odtwarzały zamrożone runy co do bitu; na innym GPU lub sterowniku możliwe są
+małe różnice. Nowe artefakty nie zastępują Release `distilbert-v1` — wdrożenie zawsze bierze
+oceniony artefakt z Release (suma w configu).
+
+**B. Ponowne HPO** — osobny klon i magazyn; bez refitu i bez testu.
+
+| Krok | Komenda (`uv run python scripts/…`) | Blokada | Porównaj z |
+|---|---|---|---|
+| B1. TF-IDF + LR, Optuna TPE (16 prób) | `hpo_tfidf_lr.py` | badanie (tag `hpo_study`) raz w magazynie | `models.tfidf_lr.frozen` (próba #12) |
+| B2. MiniLM + kNN, siatka k × wagi | `knn_minilm.py` | jak wyżej | `models.minilm_knn.frozen` (k = 1, `uniform`) |
+| B3. DistilBERT, 5 LR × 5 epok | `train_distilbert.py` | jak wyżej; checkpointy ok. 6,3 GB w `dane/cache/distilbert` | `models.distilbert.frozen` (LR 6e-5, epoka 4) |
+| B4. Seedy DistilBERT (stretch 1) | `seed_study_distilbert.py` | badanie `seed_study` raz; wymaga runu z B3 w tym samym magazynie (kontrola seeda 42) | *Rozrzut DistilBERT po seedach* |
+
+Skrypty B drukują zwycięzcę jako fragment YAML — configu nie zmieniamy: konfiguracje zamrożono
+14.10, przed testem (ADR-0002). Inny zwycięzca to wniosek do raportu, nie powód do nowego
+strojenia.
+
 ## Plan — 5 slotów, 60 h (30.09 → 31.10.2026)
 
 Podział pracy: dane/protokół/EDA **10 h** · modele/HPO **12 h** · ewaluacja i analiza błędów **6 h**
@@ -484,7 +538,9 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     budowa obrazu 98 s, smoke kontenera [OK]; kind: klaster 19 s, `kind load` 63 s, rollout 6 s,
     smoke [OK]. Usterki: (1) krok „API lokalnie” przed pobraniem modelu — poprawione
     (kolejność), (2) `--extra gpu` nie instaluje się na macOS — dopisane `--extra cpu`,
-    (3) brak opisu odtworzenia treningu i oceny (kolejność skryptów, blokady budżetu) — do decyzji
+    (3) brak opisu odtworzenia treningu i oceny — dopisana sekcja *Odtworzenie wyników*
+    (A — zamrożone modele z jedną oceną testową, B — ponowne HPO), jeszcze nieprzećwiczona
+    przebiegiem od zera
   - [ ] Stretch po rdzeniu, do czw 22.10:
     - [x] seedy DistilBERT na walidacji (18.10): tabela i wniosek w *Wyniki na walidacji*
     - [ ] LLM zero-shot (385) → UI Streamlit → GKE
