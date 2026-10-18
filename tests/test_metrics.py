@@ -51,3 +51,23 @@ def test_values_outside_label_map_are_rejected():
 def test_length_mismatch_is_rejected():
     with pytest.raises(ValueError, match="tej samej długości"):
         evaluate([0, 1, 2], [0, 1], LABEL_MAP)
+
+
+def test_invalid_prediction_is_a_miss_without_false_positive():
+    # 18.10, za zgodą autora: błąd formatu LLM (-1) = pomyłka klasy "a", bez trafienia innej klasy
+    result = evaluate([0, 0, 1, 2], [0, -1, 1, 2], LABEL_MAP, invalid=-1)
+    assert result.accuracy == pytest.approx(3 / 4)
+    assert result.per_class.loc["a", "recall"] == pytest.approx(0.5)
+    assert result.per_class.loc[["a", "b", "c"], "precision"].tolist() == [1.0, 1.0, 1.0]
+    assert result.macro_f1 == pytest.approx((2 / 3 + 1 + 1) / 3)
+    assert int(result.confusion.to_numpy().sum()) == 3  # brak kolumny dla -1
+    assert result.n_samples == 4
+
+
+def test_invalid_is_opt_in_prediction_only_and_never_a_class():
+    with pytest.raises(ValueError, match="spoza mapy"):
+        evaluate([0, 1], [0, -1], LABEL_MAP)  # bez `invalid` — jak dotąd
+    with pytest.raises(ValueError, match="spoza mapy"):
+        evaluate([-1, 1], [0, 1], LABEL_MAP, invalid=-1)  # nie w y_true
+    with pytest.raises(ValueError, match="jest id klasy"):
+        evaluate([0, 1], [0, 1], LABEL_MAP, invalid=0)

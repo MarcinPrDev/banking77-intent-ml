@@ -63,10 +63,13 @@ def test_settings_load() -> None:
     assert isinstance(s.models.tfidf_lr.hpo.tie_tolerance, float)
     assert s.models.tfidf_lr.frozen is None or set(s.models.tfidf_lr.frozen) == {"tfidf", "logreg"}
 
-    # LLM = stretch, domyślnie wyłączony; model to placeholder do decyzji Marcina (niepusty string)
-    assert s.llm.enabled is False
-    assert isinstance(s.llm.model, str) and s.llm.model
+    # LLM = stretch 2, włączony decyzją autora 18.10.2026: model w konwencji LiteLLM groq/<id>,
+    # cennik z configu, dobór promptu na walidacji (val_per_class), zamrożony wariant albo None
+    assert s.llm.enabled is True
+    assert s.llm.model.startswith("groq/")
     assert s.llm.n_eval == s.llm.per_class * s.dataset.n_classes
+    assert s.llm.price_input_usd_per_mtok > 0 and s.llm.price_output_usd_per_mtok > 0
+    assert s.llm.frozen_prompt is None or s.llm.frozen_prompt in s.llm.prompts
 
 
 def test_tfidf_lr_config_is_valid_for_installed_sklearn() -> None:

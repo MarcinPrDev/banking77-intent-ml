@@ -9,6 +9,9 @@ Decyzje projektowe autora (6.10.2026):
    wchodzi do średniej z F1 = 0, zamiast po cichu zniknąć; `zero_division=0`.
 3. Raport per klasa (precision, recall, F1, support) i macierz pomyłek n x n z nazwami klas —
    jako tabele, które `evaluation/tracking.py` zapisuje przy runie MLflow jako artefakty.
+4. (18.10.2026, za zgodą autora) Opcjonalne `invalid`: predykcja „spoza mapy” (błąd formatu LLM)
+   liczona jako pomyłka prawdziwej klasy, bez fałszywego trafienia żadnej klasy; domyślnie
+   wyłączone — pozostałe ścieżki bez zmian.
 """
 
 from __future__ import annotations
@@ -45,9 +48,18 @@ def class_names(label_map: dict[str, int]) -> list[str]:
 
 
 def evaluate(
-    y_true: Sequence[int], y_pred: Sequence[int], label_map: dict[str, int]
+    y_true: Sequence[int],
+    y_pred: Sequence[int],
+    label_map: dict[str, int],
+    *,
+    invalid: int | None = None,
 ) -> EvaluationResult:
-    """Accuracy, macro-F1, raport per klasa i macierz pomyłek dla id klas z mapy etykiet."""
+    """Accuracy, macro-F1, raport per klasa i macierz pomyłek dla id klas z mapy etykiet.
+
+    `invalid`: wartość dozwolona tylko w `y_pred` (np. -1 = odpowiedź spoza mapy) — liczona jako
+    pomyłka prawdziwej klasy, bez fałszywego trafienia innej; w macierzy pomyłek nie ma dla niej
+    kolumny (suma wiersza < support). Nie może być id klasy.
+    """
     names = class_names(label_map)
     labels = list(range(len(names)))
     true, pred = np.asarray(y_true), np.asarray(y_pred)
@@ -55,7 +67,13 @@ def evaluate(
         raise ValueError(f"y_true i y_pred: oczekiwano wektorów tej samej długości, "
                          f"jest {true.shape} i {pred.shape}")
     valid = set(labels)
-    outside = sorted({repr(v) for v in set(true.tolist()) | set(pred.tolist()) if v not in valid})
+    if invalid is not None and invalid in valid:
+        raise ValueError(f"invalid={invalid!r} jest id klasy (0..{len(names) - 1})")
+    allowed_pred = valid | ({invalid} if invalid is not None else set())
+    outside = sorted(
+        {repr(v) for v in set(true.tolist()) if v not in valid}
+        | {repr(v) for v in set(pred.tolist()) if v not in allowed_pred}
+    )
     if outside:
         raise ValueError(f"wartości spoza mapy etykiet (id 0..{len(names) - 1}): {outside[:10]}")
 

@@ -15,7 +15,7 @@ wystarczy `COPY configs/ /app/configs/` + `ENV BANKING77_CONFIG=/app/configs/con
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -186,6 +186,16 @@ class LlmConfig:
     n_eval: int
     per_class: int
     eval_ids_path: Path  # allow-testset
+    # Stretch 2 (W4, decyzje autora 18.10.2026); w YAML-u wymagane, domyślne dla testów.
+    temperature: float = 0.0
+    reasoning_effort: str | None = None
+    include_reasoning: bool = False
+    max_completion_tokens: int = 1024
+    price_input_usd_per_mtok: float = 0.0
+    price_output_usd_per_mtok: float = 0.0
+    val_per_class: int = 5
+    prompts: dict[str, str] = field(default_factory=dict)  # wariant -> szablon {labels} {text}
+    frozen_prompt: str | None = None
 
 
 @dataclass(frozen=True)
@@ -363,6 +373,15 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
             n_eval=int(llm["n_eval"]),
             per_class=int(llm["per_class"]),
             eval_ids_path=_abs(llm["eval_ids_path"]),  # allow-testset
+            temperature=float(llm["temperature"]),
+            reasoning_effort=llm["reasoning_effort"],
+            include_reasoning=bool(llm["include_reasoning"]),
+            max_completion_tokens=int(llm["max_completion_tokens"]),
+            price_input_usd_per_mtok=float(llm["price_usd_per_mtok"]["input"]),
+            price_output_usd_per_mtok=float(llm["price_usd_per_mtok"]["output"]),
+            val_per_class=int(llm["val_per_class"]),
+            prompts={str(name): str(text or "") for name, text in llm["prompts"].items()},
+            frozen_prompt=llm["frozen_prompt"],
         ),
         mlflow=MlflowConfig(
             tracking_uri="sqlite:///" + _abs(raw["paths"]["mlflow_db"]).as_posix(),

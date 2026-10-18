@@ -189,19 +189,39 @@ models:
 llm:
   # Stretch A (po domknięciu rdzenia). Jeden model, jeden zamrożony prompt, dobór promptu TYLKO
   # na walidacji. Ekspozycja LLM na benchmark nieustalona — wynik nie dowodzi generalizacji.
-  enabled: false
-  # Wybór modelu = decyzja merytoryczna Marcina przy starcie stretchu A (jeden model, jeden
-  # zamrożony prompt). `DO-WYBORU` = placeholder do tej decyzji. Kandydaci z katalogu Groq (smoke 28.09):
-  # openai/gpt-oss-20b, openai/gpt-oss-120b (UWAGA: reasoning zużywa max_tokens -> przy małym
-  # limicie pusta odpowiedź; brak cennika w LiteLLM -> koszt liczony ręcznie z cennika Groq),
-  # qwen3.8-27b. Zapis w konwencji LiteLLM: groq/<id modelu>. Groq plan płatny (Developer tier).
-  model: DO-WYBORU
+  enabled: true                            # stretch 2 w W4 (decyzja autora 18.10.2026)
+  # Decyzje autora 18.10.2026: model produkcyjny Groq gpt-oss-20b (konwencja LiteLLM groq/<id>;
+  # Groq plan płatny, Developer tier); temperatura 0 (powtarzalność); LLM poza IntentClassifier —
+  # odpowiedź spoza 77 nazw = błąd formatu, liczony jako pomyłka (evaluate(..., invalid=-1)).
+  model: groq/openai/gpt-oss-20b
+  temperature: 0
+  # Groq gpt-oss (console.groq.com/docs/reasoning, 18.10.2026): reasoning_effort low|medium|high;
+  # rozumowanie zużywa limit tokenów (smoke 18.10: przy małym limicie pusta odpowiedź);
+  # include_reasoning: false = bez rozumowania w odpowiedzi; 1024 = domyślny limit Groq.
+  reasoning_effort: low
+  include_reasoning: false
+  max_completion_tokens: 1024
+  # Cennik Groq (console.groq.com/docs/models, 18.10.2026), USD za 1M tokenów. LiteLLM nie ma
+  # cennika tego modelu — koszt = tokeny z odpowiedzi API × te stawki.
+  price_usd_per_mtok:
+    input: 0.075
+    output: 0.30
   n_eval: 385                              # 5 na klasę x 77 — te same wiadomości dla WSZYSTKICH modeli
   per_class: 5
   # 385 id testu (5/klasę) wybrane Z GÓRY, przed treningiem. Sposób losowania (seed, stratyfikacja
   # per klasa) ustala Marcin w W1 razem z make_splits — plik 04 §6 mówi tylko "wcześniej wybrane,
   # po pięć na klasę"; propozycja: seed = split.random_state. Hash listy do split_manifest.json.
   eval_ids_path: dane/splits/llm_eval_ids.json
+  # Dobór promptu (decyzja autora 18.10.2026): 2 warianty, każdy raz na 385 zdaniach walidacji
+  # (val_per_class na klasę, losowanie z seedem split.random_state); potem jednorazowo test 385.
+  val_per_class: 5
+  # Szablony autora: {labels} = 77 nazw intencji (po jednej w linii, kolejność id), {text} =
+  # wiadomość klienta. Odpowiedź = dokładnie jedna nazwa (po normalizacji: małe litery, bez spacji
+  # na brzegach, cudzysłowów, backticków i końcowej kropki). Pusty szablon = skrypt odmawia.
+  prompts:
+    v1: ""
+    v2: ""
+  frozen_prompt: null                      # wpis autora po doborze na walidacji: v1 albo v2
 
 mlflow:
   # tracking_uri i artifact_location NIE są kluczami configu — settings wyprowadza je z paths
