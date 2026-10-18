@@ -213,6 +213,17 @@ uv run ruff check .
 # gpu = torch z indeksu cu128 (RTX 5080/sm_120) + transformers; nlp = sentence-transformers;
 # serving = fastapi, uvicorn, httpx (API od W2); llm (stretch A): dodatkowo --extra llm
 # + GROQ_API_KEY w .env (poza gitem)
+# Bez GPU NVIDIA albo na macOS: zamiast --extra gpu użyj --extra cpu (torch 2.11.0 z indeksu CPU,
+# jak w obrazie; koła cu128 są tylko dla Linuksa i Windows). Wystarcza do testów, API i obrazu;
+# trening DistilBERT wymaga --extra gpu (accelerate + CUDA).
+```
+
+**Model do API i obrazu** — oceniony artefakt `models/final/distilbert` z GitHub Release (`gh`
+zalogowany na konto z dostępem do repo) albo z refitu (`uv run python scripts/refit_final.py`):
+
+```bash
+gh release download distilbert-v1 -p distilbert-v1.tar -D dist
+uv run python scripts/model_release.py unpack dist/distilbert-v1.tar   # weryfikacja → models/final/distilbert
 ```
 
 **API lokalnie** — serwuje model z `deploy.artifact_dir` (ADR-0003: DistilBERT); port 8000 bywa
@@ -222,13 +233,10 @@ na Windows zarezerwowany przez system, stąd 8080; dokumentacja endpointów: `ht
 uv run uvicorn banking77_intent_ml.api.app:create_app --factory --port 8080
 ```
 
-**Obraz Docker CPU** (W3) — wymaga artefaktu `models/final/distilbert`: z GitHub Release
-(niżej; `gh` zalogowany na konto z dostępem do repo) albo z refitu
-(`uv run python scripts/refit_final.py`); `MODEL_VERSION` = `deploy.model_version` z configu:
+**Obraz Docker CPU** (W3) — z artefaktem pobranym wyżej; `MODEL_VERSION` = `deploy.model_version`
+z configu:
 
 ```bash
-gh release download distilbert-v1 -p distilbert-v1.tar -D dist
-uv run python scripts/model_release.py unpack dist/distilbert-v1.tar   # weryfikacja → models/final/distilbert
 docker build --build-arg MODEL_VERSION=distilbert-v1 -t banking77-intent-api:distilbert-v1 .
 docker run --rm -p 8080:8000 banking77-intent-api:distilbert-v1
 uv run python scripts/smoke_api.py --url http://localhost:8080   # drugi terminal: smoke
@@ -470,9 +478,16 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     24 GB), model z Release + weryfikacja 4 s, budowa obrazu od zera 98 s (2,21 GB), klaster kind
     44 s, `kind load` 100 s, rollout 13 s, smoke 3 s; tag w Deployment = `deploy.model_version`;
     akcje przypięte pełnym SHA, bez sekretów (tylko `GITHUB_TOKEN`)
-  - [ ] Próba odtworzenia z instrukcji na świeżym klonie
-  - [ ] Stretch po rdzeniu, do czw 22.10: seedy DistilBERT na walidacji → LLM zero-shot (385)
-    → UI Streamlit → GKE
+  - [ ] Próba odtworzenia z instrukcji na świeżym klonie (autor). Próba techniczna asystenta
+    18.10 (świeży klon na `P:`, komendy z README po kolei, przy ciepłych cache uv/Docker/kind):
+    klon 1 s, `uv sync` 64 s, `fetch_data` 1 s, testy 239/239 w 52 s, model z Release 8 s,
+    budowa obrazu 98 s, smoke kontenera [OK]; kind: klaster 19 s, `kind load` 63 s, rollout 6 s,
+    smoke [OK]. Usterki: (1) krok „API lokalnie” przed pobraniem modelu — poprawione
+    (kolejność), (2) `--extra gpu` nie instaluje się na macOS — dopisane `--extra cpu`,
+    (3) brak opisu odtworzenia treningu i oceny (kolejność skryptów, blokady budżetu) — do decyzji
+  - [ ] Stretch po rdzeniu, do czw 22.10:
+    - [x] seedy DistilBERT na walidacji (18.10): tabela w *Wyniki na walidacji*; wniosek — autor
+    - [ ] LLM zero-shot (385) → UI Streamlit → GKE
 - [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
 - [ ] gitleaks + LICENSE → upublicznienie repo (najpóźniej przy wysyłce)
 - [x] **2.10 — zmiana nazwy** repo, pakietu i folderu na `banking77-intent-ml` /
@@ -499,6 +514,25 @@ nie do porównań z literaturą; wszystkie liczby z MLflow):
 | DistilBERT | **zamrożona (W2):** distilbert-base-uncased @ `12040acc`, LR 6e-5, epoka 4 z 5 (wariant 4; reszta jak Qi 2021: batch 32, `max_len` 128, warmup 10%, wd 0,01) | 90,99% | 90,76%[^distilbert] | 8 504 / 1 499 | 25 (5 LR × 5 epok) | 22,8 s (5 epok z oceną co epokę, GPU) |
 
 [^distilbert]: 90,76% to `val_macro_f1` z epoki 4 runu `f37e7471`; główne `macro_f1` tego runu to 90,78% z epoki 5. Różnica jest poniżej 0,001 (0,1 punktu procentowego), więc reguła remisu wybrała wcześniejszą epokę.
+
+**Rozrzut DistilBERT po seedach** (stretch 1, 18.10; decyzje autora przed wynikiem: 5 nowych
+seedów + kontrolnie 42, zamrożona konfiguracja, wynik po epoce 4 bez wyboru epoki per seed; ta
+sama zamrożona walidacja 8 504 / 1 499, test nietknięty; liczby z MLflow, badanie
+`seed_study=distilbert_val_seeds`, commit `f93d533`):
+
+| Seed | Acc (val) | Macro-F1 (val) | Run |
+|---|---:|---:|---|
+| 42 — kontrola (odtwarza run W2 `f37e7471` co do bitu) | 90,99% | 90,76% | `e2de28e4` |
+| 1 | 91,06% | 90,80% | `b5601e4a` |
+| 2 | 91,33% | 91,14% | `b2d3378f` |
+| 3 | 91,26% | 91,02% | `72aa5341` |
+| 4 | 91,26% | 91,12% | `4ca957e5` |
+| 5 | 90,93% | 90,80% | `5adb3736` |
+| **6 seedów: średnia (odch. std)** | **91,14% (0,17)** | **90,94% (0,17)** | |
+| min – max | 90,93–91,33% | 90,76–91,14% | |
+
+Odniesienie: MiniLM + kNN (deterministyczny, bez seeda) — macro-F1 91,27% na tej samej
+walidacji. Trening jednego seeda 22–25 s (GPU).
 
 **Wrażliwość na budżet strojenia** (macro-F1 na tej samej zamrożonej walidacji 1 499 zdań,
 jeden seed; liczby z MLflow):
