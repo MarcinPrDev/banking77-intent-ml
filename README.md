@@ -527,7 +527,9 @@ Artefakt MiniLM + kNN = indeks 10 003 wektorów + wagi enkodera z cache Hugging 
 
 Źródło: runy `fb0d0bde`, `04ec980a`, `0c08edb4` z commita `6cae45d`; jedna ocena na ścieżkę.
 Wyniki na 385 przykładach pozostają w MLflow, do raportu razem z LLM.
-Wybór do wdrożenia: jakość razem z kosztami finalnych artefaktów. Konfiguracje bez dalszego strojenia.
+DistilBERT wybrano do wdrożenia po obejrzeniu wyników testu, z uwzględnieniem kosztów.
+93,02% to wynik zamrożonego modelu, ale nie niezależne potwierdzenie tego wyboru.
+Wybór spośród trzech modeli zamrożonych przed testem; po ocenie bez dalszego strojenia.
 
 ## Analiza błędów (W3)
 

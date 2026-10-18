@@ -65,7 +65,10 @@ Różnice accuracy liczone z liczby błędów, przed zaokrągleniem.
 Przewaga nad kNN to 0,97 punktu, czyli 30 błędów.
 Jeden seed i odwrócenie rankingu względem walidacji nie dowodzą stabilnej przewagi.
 Nie rozstrzygamy, ile różnicy wynika z losowości treningu i składu próby.
-To wybór konkretnego artefaktu. Konfiguracje i etykiety bez zmian.
+DistilBERT wybrano do wdrożenia po obejrzeniu wyników testu.
+93,02% to wynik zamrożonego modelu, ale nie niezależne potwierdzenie tego wyboru.
+Wybór spośród trzech modeli zamrożonych przed testem; po ocenie bez dalszego strojenia.
+Konfiguracje i etykiety bez zmian.
 
 ## Skąd model w CI
 
