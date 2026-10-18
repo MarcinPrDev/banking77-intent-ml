@@ -142,6 +142,7 @@ class DistilbertConfig:
     variants: tuple[dict[str, Any], ...] = ()  # nadpisania bazy (np. {"lr": 2e-5}), len == configs
     tie_tolerance: float = 0.001
     frozen: dict[str, Any] | None = None  # zwycięzca {lr, epoch} albo None
+    seed_study: tuple[int, ...] = ()  # dodatkowe seedy zamrożonej konfiguracji (stretch 1)
 
 
 def _distilbert(raw: dict) -> DistilbertConfig:
@@ -166,6 +167,7 @@ def _distilbert(raw: dict) -> DistilbertConfig:
         variants=variants,
         tie_tolerance=float(raw["tie_tolerance"]),
         frozen=raw["frozen"],
+        seed_study=tuple(int(seed) for seed in raw["seed_study"]),
     )
 
 

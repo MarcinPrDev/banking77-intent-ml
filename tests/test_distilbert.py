@@ -38,6 +38,7 @@ from banking77_intent_ml.models import distilbert  # noqa: E402
 from banking77_intent_ml.models.hpo import STUDY_TAG  # noqa: E402
 
 _CLI = Path(__file__).resolve().parents[1] / "scripts" / "train_distilbert.py"
+_SEED_CLI = Path(__file__).resolve().parents[1] / "scripts" / "seed_study_distilbert.py"
 _VOCAB = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]", "top", "up", "card", "rate"]
 
 
@@ -128,6 +129,87 @@ def test_cli_refuses_second_study_before_training(tmp_mlflow_settings, monkeypat
     spec.loader.exec_module(cli)
     monkeypatch.setattr(cli, "load_settings", lambda: tmp_mlflow_settings)
     monkeypatch.setattr(cli, "count_runs_with_tag", lambda *args: 5)
+    monkeypatch.setattr(
+        cli, "load_train_val", lambda *args: pytest.fail("dane wczytane mimo zużytego budżetu")
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+
+    assert exc.value.code == 1
+    assert "budżet" in capsys.readouterr().out
+
+
+# --- Stretch 1: seedy zamrożonej konfiguracji (18.10) ---------------------------------------
+
+
+@pytest.fixture
+def tiny_frozen(tiny):
+    """`tiny` z zamrożonym wariantem 0 (lr 1e-3, epoka 2 z 2) i jednym dodatkowym seedem."""
+    model_cfg = replace(tiny.models.distilbert, frozen={"lr": 1e-3, "epoch": 2}, seed_study=(7,))
+    return replace(tiny, models=replace(tiny.models, distilbert=model_cfg))
+
+
+def _seed_dir(settings, seed):
+    return settings.paths.cache_dir / distilbert.CACHE_SUBDIR / distilbert.SEED_STUDY_SUBDIR / (
+        f"seed-{seed}"
+    )
+
+
+def test_seed_run_reports_frozen_epoch_without_checkpoints(toy_data, tiny_frozen):
+    run = distilbert.run_seed(7, toy_data, tiny_frozen)
+
+    assert not list(_seed_dir(tiny_frozen, 7).glob("checkpoint-*"))
+    assert run.frozen_epoch == 2 and len(run.curve) == 2
+    logged = MlflowClient(tiny_frozen.mlflow.tracking_uri).get_run(run.run_id)
+    assert logged.data.tags[distilbert.SEED_STUDY_TAG] == distilbert.SEED_STUDY_NAME
+    assert logged.data.params["seed"] == "7" and logged.data.params["data_seed"] == "7"
+    assert logged.data.params["frozen_epoch"] == "2"
+    selection = tiny_frozen.evaluation.selection_metric
+    assert run.metrics[selection] == pytest.approx(run.curve[1])
+    assert logged.data.metrics[selection] == pytest.approx(run.curve[1])
+
+
+def test_seed_run_with_project_seed_reproduces_variant_training(toy_data, tiny_frozen):
+    variant = distilbert.run_variant(0, toy_data, tiny_frozen)
+    control = distilbert.run_seed(tiny_frozen.models.seed, toy_data, tiny_frozen)
+
+    client = MlflowClient(tiny_frozen.mlflow.tracking_uri)
+    for name in ("val_loss", f"val_{tiny_frozen.evaluation.selection_metric}"):
+        expected = sorted(client.get_metric_history(variant.run_id, name), key=lambda m: m.step)
+        got = sorted(client.get_metric_history(control.run_id, name), key=lambda m: m.step)
+        assert [m.value for m in got] == [m.value for m in expected]
+    assert distilbert.frozen_reference(tiny_frozen) == pytest.approx(variant.epochs[1].objective)
+
+
+def test_seed_run_refuses_dirty_output_dir(toy_data, tiny_frozen):
+    (_seed_dir(tiny_frozen, 7) / "pozostalosc").mkdir(parents=True)
+    with pytest.raises(FileExistsError, match="nie jest pusty"):
+        distilbert.run_seed(7, toy_data, tiny_frozen)
+
+
+def test_seed_run_needs_frozen_epoch_within_schedule(toy_data, tiny):
+    # `tiny` ma 2 epoki, a zamrożona epoka z configu projektu to 4
+    with pytest.raises(ValueError, match="poza zakresem"):
+        distilbert.run_seed(7, toy_data, tiny)
+
+
+def test_seed_study_runs_control_seed_first(toy_data, tiny_frozen):
+    runs = distilbert.run_seed_study(toy_data, tiny_frozen)
+
+    assert [run.seed for run in runs] == [tiny_frozen.models.seed, 7]
+    tag, name = distilbert.SEED_STUDY_TAG, distilbert.SEED_STUDY_NAME
+    assert count_runs_with_tag(tiny_frozen, tag, name) == 2
+
+
+def test_seed_study_cli_refuses_second_study_before_training(
+    tmp_mlflow_settings, monkeypatch, capsys
+):
+    spec = importlib.util.spec_from_file_location("seed_study_cli", _SEED_CLI)
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    monkeypatch.setattr(cli, "load_settings", lambda: tmp_mlflow_settings)
+    monkeypatch.setattr(cli, "count_runs_with_tag", lambda *args: 6)
     monkeypatch.setattr(
         cli, "load_train_val", lambda *args: pytest.fail("dane wczytane mimo zużytego budżetu")
     )

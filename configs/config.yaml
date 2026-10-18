@@ -180,6 +180,11 @@ models:
     frozen:
       lr: 6.0e-5
       epoch: 4
+    # Stretch 1 (decyzja autora 18.10.2026, przed wynikiem): rozrzut zamrożonej konfiguracji po
+    # seedach na walidacji (test nietknięty) — 5 nowych seedów + kontrolnie models.seed (musi
+    # odtworzyć zamrożony run W2); wynik każdego seeda po epoce `frozen.epoch`, bez wyboru epoki.
+    # Jedno badanie (tag seed_study) — scripts/seed_study_distilbert.py.
+    seed_study: [1, 2, 3, 4, 5]
 
 llm:
   # Stretch A (po domknięciu rdzenia). Jeden model, jeden zamrożony prompt, dobór promptu TYLKO

@@ -10,12 +10,16 @@ wagi po każdej epoce w cache (`paths.cache_dir/distilbert/variant-N/checkpoint-
 z tokenizerem), krzywe per epoka i wynik najlepszej epoki wariantu w MLflow (tabele per klasa
 przez wspólne `evaluate()` na predykcjach z ewaluacji tej epoki). Reguła wyboru checkpointu
 ustalona przed treningiem; budżet pilnuje CLI (`scripts/train_distilbert.py`).
+
+Stretch 1 (decyzja autora 18.10.2026): `run_seed` / `run_seed_study` — zamrożona konfiguracja
+z innymi seedami (`models.distilbert.seed_study` + kontrolnie `models.seed`), wynik po zamrożonej
+epoce na walidacji, bez zapisu checkpointów; budżet pilnuje `scripts/seed_study_distilbert.py`.
 """
 
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +27,7 @@ import numpy as np
 import pandas as pd
 import torch
 import transformers
+from mlflow.tracking import MlflowClient
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
@@ -41,6 +46,9 @@ from banking77_intent_ml.models.hpo import STUDY_TAG
 
 STUDY_NAME = "distilbert_w2"  # wartość tagu `hpo_study` — jedno badanie = wszystkie warianty
 CACHE_SUBDIR = "distilbert"
+SEED_STUDY_TAG = "seed_study"
+SEED_STUDY_NAME = "distilbert_val_seeds"  # jedno badanie = models.seed + seed_study
+SEED_STUDY_SUBDIR = "seed-study"
 
 
 @dataclass(frozen=True)
@@ -252,3 +260,131 @@ def run_distilbert(data: TrainVal, settings: Settings) -> list[DistilbertRun]:
     """Wszystkie warianty z configu, po kolei."""
     variants = settings.models.distilbert.variants
     return [run_variant(index, data, settings) for index in range(len(variants))]
+
+
+@dataclass(frozen=True)
+class SeedRun:
+    seed: int
+    run_id: str
+    frozen_epoch: int
+    metrics: dict[str, float]  # metryki walidacji po zamrożonej epoce (= metryki runu)
+    curve: list[float]  # evaluation.selection_metric po kolejnych epokach (informacyjnie)
+    train_seconds: float
+
+
+def run_seed(seed: int, data: TrainVal, settings: Settings) -> SeedRun:
+    """Zamrożona konfiguracja z innym seedem treningu i danych (stretch 1).
+
+    Ten sam przepis co `run_variant` dla LR z `frozen.lr`: harmonogram na `epochs` epok, ocena
+    po każdej epoce; wynik runu = metryki po epoce `frozen.epoch`, bez wyboru epoki per seed.
+    Bez zapisu checkpointów (logi Trainera w `paths.cache_dir/distilbert/seed-study/seed-<seed>`).
+    Dla `models.seed` odtwarza zamrożony run W2 — kontrola pętli (`frozen_reference`).
+    """
+    cfg = settings.models.distilbert
+    if cfg.frozen is None:
+        raise ValueError("models.distilbert.frozen nie jest ustawione — brak konfiguracji")
+    frozen_epoch = int(cfg.frozen["epoch"])
+    if not 1 <= frozen_epoch <= cfg.epochs:
+        raise ValueError(f"frozen.epoch {frozen_epoch} poza zakresem 1..{cfg.epochs}")
+    seeded = replace(settings, models=replace(settings.models, seed=seed))
+    output_dir = settings.paths.cache_dir / CACHE_SUBDIR / SEED_STUDY_SUBDIR / f"seed-{seed}"
+    if output_dir.exists() and any(output_dir.iterdir()):
+        raise FileExistsError(f"{output_dir} nie jest pusty — usuń pozostałości po treningu")
+
+    set_seed(seed)
+    tokenizer = _load_tokenizer(seeded)
+    variant = {"lr": float(cfg.frozen["lr"])}
+    args = replace(training_arguments(variant, seeded, output_dir), save_strategy="no")
+    predictions: list[np.ndarray] = []
+
+    def metrics_fn(eval_pred: EvalPrediction) -> dict[str, float]:
+        logits = eval_pred.predictions
+        logits = logits[0] if isinstance(logits, tuple) else logits
+        predictions.append(np.asarray(logits).argmax(axis=-1))
+        return compute_metrics(eval_pred, settings=seeded, label_map=data.label_map)
+
+    trainer = Trainer(
+        model=_load_model(seeded, data.label_map),
+        args=args,
+        data_collator=DataCollatorWithPadding(tokenizer),
+        train_dataset=_features(data.x_train, data.y_train, tokenizer, cfg.max_len),
+        eval_dataset=_features(data.x_val, data.y_val, tokenizer, cfg.max_len),
+        processing_class=tokenizer,
+        compute_metrics=metrics_fn,
+    )
+    start = time.perf_counter()
+    trainer.train()
+    train_seconds = time.perf_counter() - start
+
+    selection = settings.evaluation.selection_metric
+    evals = [entry for entry in trainer.state.log_history if f"eval_{selection}" in entry]
+    epochs = [int(round(entry["epoch"])) for entry in evals]
+    if len(evals) != len(predictions) or frozen_epoch not in epochs:
+        raise RuntimeError(f"ewaluacje po epokach {epochs}, predykcji {len(predictions)}")
+    at = epochs.index(frozen_epoch)
+    result = evaluate(data.y_val, predictions[at], data.label_map)
+    curve_names = sorted({settings.evaluation.primary_metric, selection, "loss"})
+    run_id = log_validation_run(
+        run_name=f"distilbert-seed{seed}",
+        params={
+            "model": "distilbert",
+            "model_id": cfg.model_id,
+            "revision": cfg.revision,
+            "lr": args.learning_rate,
+            "epochs": args.num_train_epochs,
+            "frozen_epoch": frozen_epoch,
+            "batch_size": args.per_device_train_batch_size,
+            "max_len": cfg.max_len,
+            "seed": args.seed,
+            "data_seed": args.data_seed,
+            "bf16": args.bf16,
+            "transformers": transformers.__version__,
+            "torch": torch.__version__,
+        },
+        result=result,
+        settings=seeded,
+        tags={"model_family": "distilbert", SEED_STUDY_TAG: SEED_STUDY_NAME},
+        fit_seconds=train_seconds,
+        curves={f"val_{name}": [entry[f"eval_{name}"] for entry in evals] for name in curve_names},
+    )
+    return SeedRun(
+        seed=seed,
+        run_id=run_id,
+        frozen_epoch=frozen_epoch,
+        metrics=result.metrics(),
+        curve=[float(entry[f"eval_{selection}"]) for entry in evals],
+        train_seconds=train_seconds,
+    )
+
+
+def run_seed_study(data: TrainVal, settings: Settings) -> list[SeedRun]:
+    """Kontrolnie `models.seed`, potem `models.distilbert.seed_study`, po kolei."""
+    seeds = (settings.models.seed, *settings.models.distilbert.seed_study)
+    if len(set(seeds)) != len(seeds):
+        raise ValueError(f"seedy badania muszą być różne: {seeds}")
+    return [run_seed(seed, data, settings) for seed in seeds]
+
+
+def frozen_reference(settings: Settings) -> float:
+    """`selection_metric` zamrożonego runu W2 po zamrożonej epoce (wartość z krzywej w MLflow)."""
+    cfg = settings.models.distilbert
+    client = MlflowClient(settings.mlflow.tracking_uri)
+    experiment = client.get_experiment_by_name(settings.mlflow.experiment)
+    if experiment is None:
+        raise LookupError(f"brak eksperymentu {settings.mlflow.experiment} w MLflow")
+    lr = float(cfg.frozen["lr"])
+    runs = [
+        run
+        for run in client.search_runs(
+            [experiment.experiment_id], filter_string=f"tags.{STUDY_TAG} = '{STUDY_NAME}'"
+        )
+        if float(run.data.params["lr"]) == lr
+    ]
+    if len(runs) != 1:
+        raise LookupError(f"oczekiwano 1 runu {STUDY_NAME} z lr {lr:g}, jest {len(runs)}")
+    name = f"val_{settings.evaluation.selection_metric}"
+    history = client.get_metric_history(runs[0].info.run_id, name)
+    values = [m.value for m in history if m.step == int(cfg.frozen["epoch"])]
+    if len(values) != 1:
+        raise LookupError(f"brak {name} po epoce {cfg.frozen['epoch']} w {runs[0].info.run_id}")
+    return values[0]
