@@ -192,6 +192,7 @@ class DistilBertClassifier(IntentClassifier):
     Adapter uczy wyłącznie na podanych danych, bez ewaluacji i wyboru checkpointu.
     Artefakt HF zawiera wagi, tokenizer i `metadata.json`; odczyt lokalny na CPU sprawdza
     hash i kolejność klas. Starszy artefakt bez `max_len` używa limitu z configu.
+    `load` wykonuje rozgrzewkę na syntetycznym tekście przed zwróceniem predyktora.
     """
 
     name = "distilbert"
@@ -323,4 +324,5 @@ class DistilBertClassifier(IntentClassifier):
         ).to("cpu").eval()
         classifier._max_len = metadata.get("max_len", settings.models.distilbert.max_len)
         classifier._metadata = metadata
+        classifier.predict_proba(["warmup"])
         return classifier

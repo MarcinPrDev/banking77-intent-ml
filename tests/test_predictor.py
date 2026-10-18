@@ -568,6 +568,41 @@ def test_distilbert_loads_native_artifact_and_preserves_metadata(native_distilbe
     )
 
 
+@pytest.mark.parametrize("fail_warmup", [False, True])
+def test_distilbert_load_runs_inference_before_returning(
+    native_distilbert_artifact, monkeypatch, fail_warmup,
+):
+    import torch
+    from transformers import AutoModelForSequenceClassification
+
+    directory, settings, _, _ = native_distilbert_artifact
+    load_model = AutoModelForSequenceClassification.from_pretrained
+    outputs = []
+
+    def record_forward(model, args, kwargs, output):
+        assert model.device.type == "cpu"
+        assert not model.training
+        assert not torch.is_grad_enabled()
+        assert kwargs["input_ids"].shape[0] == 1
+        assert output.logits.shape == (1, len(_LABEL_MAP))
+        outputs.append(output.logits)
+        if fail_warmup:
+            raise RuntimeError("warmup failed")
+
+    def load_with_hook(*args, **kwargs):
+        model = load_model(*args, **kwargs)
+        model.register_forward_hook(record_forward, with_kwargs=True)
+        return model
+
+    monkeypatch.setattr(AutoModelForSequenceClassification, "from_pretrained", load_with_hook)
+    if fail_warmup:
+        with pytest.raises(RuntimeError, match="warmup failed"):
+            DistilBertClassifier.load(directory, settings)
+    else:
+        DistilBertClassifier.load(directory, settings)
+    assert len(outputs) == 1
+
+
 def test_distilbert_predict_uses_eval_softmax_and_bounded_batches(native_distilbert_artifact):
     import torch
 
