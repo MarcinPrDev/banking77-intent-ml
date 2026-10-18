@@ -218,7 +218,21 @@ docker run --rm -p 8080:8000 banking77-intent-api:distilbert-v1
 uv run python scripts/smoke_api.py --url http://localhost:8080   # drugi terminal: smoke
 ```
 
-Od W4: `kind` + workflow w GitHub Actions odtwarzalny z instrukcji w `docs/`.
+**Klaster kind lokalnie** (W4; kind v0.33.0, kubectl ≥ 1.36, obraz zbudowany wyżej) — te same
+manifesty co w CI (`k8s/`); Service NodePort dostępny z hosta pod `127.0.0.1:8081`
+(`k8s/kind/cluster.yaml`); tag obrazu = `deploy.model_version`:
+
+```bash
+kind create cluster --name banking77 --config k8s/kind/cluster.yaml
+kind load docker-image banking77-intent-api:distilbert-v1 --name banking77
+kubectl apply -f k8s/
+kubectl set image deployment/banking77-intent-api api=banking77-intent-api:distilbert-v1
+kubectl rollout status deployment/banking77-intent-api --timeout=180s
+uv run python scripts/smoke_api.py --url http://localhost:8081
+kind delete cluster --name banking77
+```
+
+Ten sam przebieg w GitHub Actions (`deploy-kind.yaml`) — w budowie (W4).
 
 ## Plan — 5 slotów, 60 h (30.09 → 31.10.2026)
 
@@ -291,13 +305,16 @@ jeśli na starcie W4 nie ma obrazu, wdrażamy baseline TF-IDF, nie czekamy na le
   `MODEL_VERSION`); walidacja wejścia (Pydantic), test kontraktu odpowiedzi w pytest.
 - **Docker:** obraz CPU z wpieczonym artefaktem; jeden wybrany model. Config i mapa etykiet
   w obrazie: `COPY configs/ /app/configs/` + `ENV BANKING77_CONFIG=/app/configs/config.yaml`
-  (settings liczą ścieżki od położenia configu). Rozmiar i czas budowy — do zmierzenia
-  (TF-IDF: bez torcha; DistilBERT/kNN: torch z indeksu CPU, nie z PyPI — na Linuxie koło z PyPI
-  zawiera CUDA).
+  (settings liczą ścieżki od położenia configu). Rozmiar 3,18 GB (W3, DistilBERT z torchem
+  z indeksu CPU, nie z PyPI — na Linuxie koło z PyPI zawiera CUDA); czas budowy od zera —
+  do zmierzenia w CI.
 - **kind w CI (obowiązkowe):** workflow GitHub Actions: `docker build` → `kind create cluster`
   → `kind load docker-image` → `kubectl apply` (Deployment + Service) → `kubectl rollout status`
   → **test HTTP** `/health` i `/predict` → teardown klastra. Dokumentujemy, że to klaster
   testowy; dowodem wdrożenia są manifesty, logi workflow i test HTTP, nie żywy URL.
+  Manifesty (W4): `k8s/deployment.yaml` (2 repliki, sondy startowa/gotowości/życia na `/health`,
+  requests 500m CPU / 512Mi, limit pamięci 1Gi), `k8s/service.yaml` (NodePort 30080),
+  `k8s/kind/cluster.yaml` (konfiguracja klastra kind, węzeł przypięty digestem).
 - **GKE (stretch #4):** ten sam obraz, klaster żyje **godziny, nie tygodnie**, `teardown`
   tego samego dnia. Koszt: kredyt GKE (74,40 USD/mies.) pokrywa opłatę za zarządzanie klastrem,
   **nie compute**; alert budżetowy nie zatrzymuje naliczania; nie zakładać zerowego kosztu na
@@ -406,7 +423,18 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     gotowością API. Pomiary kontenera z 15.10 dotyczą wersji sprzed tej zmiany.
   - Co nie zadziałało: notebook wymagał poprawy typów komórek i uzupełnienia obliczeń dla
     podanych liczb. Obraz CPU pozostał duży (3,18 GB), bo zachowano zależności treningu i analizy.
-- [ ] W4 (24–25.10): kind + workflow CI + test HTTP + odtworzenie z instrukcji
+- [ ] W4 (plan 19–25.10, start 18.10): kind + workflow CI + test HTTP + odtworzenie z instrukcji
+  - [x] Runner CI przypięty do `ubuntu-24.04` (18.10; `ubuntu-latest` przechodzi na 26.04 od 19.10)
+  - [x] Obraz przebudowany z rozgrzewką DistilBERT (18.10): build 94 s z cache zależności;
+    gotowość 3,96 s od `docker run`, pierwsze `/predict` 15,5 ms (kolejne 13,4–14,6 ms),
+    RAM 382 MiB, smoke [OK]
+  - [x] Manifesty `k8s/` + test lokalny na kind v0.33.0 / Kubernetes v1.37.0 (18.10): decyzje
+    autora — 2 repliki, requests 500m CPU / 512Mi, limit pamięci 1Gi bez limitu CPU, Service
+    NodePort; utworzenie klastra 54 s, `kind load` 54 s, rollout 4 s, smoke [OK] przez NodePort,
+    ruch na obie repliki (19/16 żądań), pamięć podów 381/377 MiB, bez restartów
+  - [ ] Model w CI z GitHub Release + SHA-256 w configu (ADR-0003, opcja a)
+  - [ ] Workflow `deploy-kind.yaml` zielony na `main` (link do runa)
+  - [ ] Próba odtworzenia z instrukcji na świeżym klonie
 - [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
 - [ ] gitleaks + LICENSE → upublicznienie repo (najpóźniej przy wysyłce)
 - [x] **2.10 — zmiana nazwy** repo, pakietu i folderu na `banking77-intent-ml` /
