@@ -1,5 +1,8 @@
 # Klasyfikacja zgłoszeń na BANKING77 — porównanie jakości, kosztu i wdrożenia metod NLP
 
+[![CI](https://github.com/MarcinPrDev/banking77-intent-ml/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/MarcinPrDev/banking77-intent-ml/actions/workflows/ci.yaml)
+[![Deploy kind](https://github.com/MarcinPrDev/banking77-intent-ml/actions/workflows/deploy-kind.yaml/badge.svg?branch=main)](https://github.com/MarcinPrDev/banking77-intent-ml/actions/workflows/deploy-kind.yaml)
+
 Projekt końcowy kursu **AI & ML Engineering** (SAGES/Kodołamacz, gr. 06.12.2025).
 Klasyfikacja intencji pojedynczej wiadomości klienta banku do jednej z **77 kategorii**
 na benchmarku [BANKING77](https://github.com/PolyAI-LDN/task-specific-datasets) (PolyAI, 2020).
@@ -245,7 +248,9 @@ uv run python scripts/smoke_api.py --url http://localhost:8081
 kind delete cluster --name banking77
 ```
 
-Ten sam przebieg w GitHub Actions (`deploy-kind.yaml`) — w budowie (W4).
+Ten sam przebieg w GitHub Actions: `.github/workflows/deploy-kind.yaml` (push na `main`, pull
+request, ręcznie) — pierwszy zielony run na `main`:
+[39138227351](https://github.com/MarcinPrDev/banking77-intent-ml/actions/runs/39138227351).
 
 ## Plan — 5 slotów, 60 h (30.09 → 31.10.2026)
 
@@ -261,7 +266,7 @@ używane przez skille (`/start-etapu Wn`) i kalendarz.
 | **W1** | pt 2.10 (wieczór) + **3–4.10** | 12 | dane pobrane i zweryfikowane; krótka EDA + audyt jakości (duplikaty, konflikty, długości, PII); mapa etykiet; **zamrożona walidacja** (grupowany, stratyfikowany split + manifest); TF-IDF baseline w MLflow; predykcje przeżywają zapis/odczyt; krótki test uruchomienia DistilBERT na GPU |
 | **W2** | **10–11.10** | 14 | trzy ścieżki (TF-IDF+LR, MiniLM+kNN, DistilBERT) z ograniczonym HPO na walidacji; pierwsze pomiary CPU (latencja, rozmiar); szkic interfejsu predyktora + Factory; **FastAPI z baseline'em** (`/predict`, `/health`, wersja modelu) |
 | **W3** | **17–18.10** | 14 | **zamrożenie eksperymentów**; ocena końcowa na teście + podzbiór 3 055; analiza błędów; wybrany artefakt wersjonowany; testy jednostkowe (mapa etykiet, walidacja wejścia, zapis→odczyt, kontrakt API); Dockerfile (obraz CPU). **Bez nowych rodzin modeli** |
-| **W4** | **24–25.10** | 14 | **kind + automatyczny workflow** (build → load → Deployment/Service → test HTTP) w GitHub Actions; próba odtworzenia projektu z instrukcji na czystym klonie; wykorzystanie rezerwy |
+| **W4** | nd **18.10** + wieczory **19–22.10** (23–25.10 bez pracy) | 14 | **kind + automatyczny workflow** (build → load → Deployment/Service → test HTTP) w GitHub Actions; próba odtworzenia projektu z instrukcji na czystym klonie; wykorzystanie rezerwy; stretch po rdzeniu, do 22.10 |
 | **W5** | **31.10 (sobota)** | 6 | raport (README z wynikami i wnioskami), demo, kontrola reprodukowalności, **oddanie**. Bez nowych funkcji |
 | | **Razem** | **60** | **Wdrożenie działa przed ostatnim dniem; 1.11 tylko poprawki po wysyłce** |
 
@@ -284,12 +289,17 @@ Docker (CPU) · **kind z automatycznym deployem i testem HTTP w CI** · README z
 i instrukcją odtworzenia.
 
 **STRETCH — w tej kolejności, dopiero po domknięciu minimum:**
-1. dodatkowe seedy finalnego transformera (przedział wyników zamiast jednej liczby);
+1. dodatkowe seedy zamrożonej konfiguracji DistilBERT, mierzone **na walidacji** (rozrzut
+   zamiast jednej liczby; test nietknięty — decyzja autora 18.10);
 2. **LLM zero-shot (wariant A)** — Groq przez LiteLLM na 385 wiadomościach, protokół jak wyżej;
 3. prosty UI (Streamlit) nad API;
 4. GCP: GKE tym samym obrazem (klaster żyje godziny), Artifact Registry.
 
 Rezerwa 8 h **nie jest** z góry budżetem na stretch.
+
+**Plan stretchu (decyzja autora 18.10):** wszystkie cztery punkty w tej kolejności, każdy po
+rdzeniu danego wieczoru W4, z granicą w czwartek 22.10 (W5 bez nowych funkcji; pt–nd 23–25.10
+bez pracy). Co nie zdąży, zostaje opisane w README jako niezrobione.
 
 ## Bramka po W1 i fallback
 
@@ -318,14 +328,17 @@ jeśli na starcie W4 nie ma obrazu, wdrażamy baseline TF-IDF, nie czekamy na le
   `MODEL_VERSION`); walidacja wejścia (Pydantic), test kontraktu odpowiedzi w pytest.
 - **Docker:** obraz CPU z wpieczonym artefaktem; jeden wybrany model. Config i mapa etykiet
   w obrazie: `COPY configs/ /app/configs/` + `ENV BANKING77_CONFIG=/app/configs/config.yaml`
-  (settings liczą ścieżki od położenia configu). Rozmiar 3,18 GB (W3, DistilBERT z torchem
-  z indeksu CPU, nie z PyPI — na Linuxie koło z PyPI zawiera CUDA); czas budowy od zera —
-  do zmierzenia w CI.
+  (settings liczą ścieżki od położenia configu). DistilBERT z torchem z indeksu CPU, nie
+  z PyPI (na Linuxie koło z PyPI zawiera CUDA). Rozmiar: 2,21 GB na runnerze CI
+  (`docker image ls`); lokalnie Docker Desktop pokazuje 3,18 GB zajętości dysku przy 822 MB
+  skompresowanej treści — inna księgowość magazynu obrazów. Budowa od zera w CI: 98 s.
 - **kind w CI (obowiązkowe):** workflow GitHub Actions: `docker build` → `kind create cluster`
   → `kind load docker-image` → `kubectl apply` (Deployment + Service) → `kubectl rollout status`
   → **test HTTP** `/health` i `/predict` → teardown klastra. Dokumentujemy, że to klaster
   testowy; dowodem wdrożenia są manifesty, logi workflow i test HTTP, nie żywy URL.
-  Manifesty (W4): `k8s/deployment.yaml` (2 repliki, sondy startowa/gotowości/życia na `/health`,
+  Pierwszy zielony run na `main`:
+  [39138227351](https://github.com/MarcinPrDev/banking77-intent-ml/actions/runs/39138227351)
+  (18.10, 6 min 28 s). Manifesty (W4): `k8s/deployment.yaml` (2 repliki, sondy startowa/gotowości/życia na `/health`,
   requests 500m CPU / 512Mi, limit pamięci 1Gi), `k8s/service.yaml` (NodePort 30080),
   `k8s/kind/cluster.yaml` (konfiguracja klastra kind, węzeł przypięty digestem).
 - **GKE (stretch #4):** ten sam obraz, klaster żyje **godziny, nie tygodnie**, `teardown`
@@ -436,7 +449,8 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     gotowością API. Pomiary kontenera z 15.10 dotyczą wersji sprzed tej zmiany.
   - Co nie zadziałało: notebook wymagał poprawy typów komórek i uzupełnienia obliczeń dla
     podanych liczb. Obraz CPU pozostał duży (3,18 GB), bo zachowano zależności treningu i analizy.
-- [ ] W4 (plan 19–25.10, start 18.10): kind + workflow CI + test HTTP + odtworzenie z instrukcji
+- [ ] W4 (start nd 18.10, wieczory 19–22.10; pt–nd 23–25.10 bez pracy — decyzja autora 18.10):
+  kind + workflow CI + test HTTP + odtworzenie z instrukcji
   - [x] Runner CI przypięty do `ubuntu-24.04` (18.10; `ubuntu-latest` przechodzi na 26.04 od 19.10)
   - [x] Obraz przebudowany z rozgrzewką DistilBERT (18.10): build 94 s z cache zależności;
     gotowość 3,96 s od `docker run`, pierwsze `/predict` 15,5 ms (kolejne 13,4–14,6 ms),
@@ -450,8 +464,15 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     (manifest: sumy plików, mapa etykiet, wersje bibliotek, runy refit `5b883a97` i ocena
     `fb0d0bde`); pobranie z GitHuba i weryfikacja: 5 plików bajt w bajt zgodnych z ocenionym
     artefaktem. Użycie w workflow — w `deploy-kind.yaml`
-  - [ ] Workflow `deploy-kind.yaml` zielony na `main` (link do runa)
+  - [x] Workflow `deploy-kind.yaml` (18.10): zielony za pierwszym razem na PR #1 i na `main` —
+    [run 39138227351](https://github.com/MarcinPrDev/banking77-intent-ml/actions/runs/39138227351),
+    6 min 28 s. Kroki (run na PR): zwolnienie dysku 85 s (wolne 13 → 31 GB z 72 GB, po budowie
+    24 GB), model z Release + weryfikacja 4 s, budowa obrazu od zera 98 s (2,21 GB), klaster kind
+    44 s, `kind load` 100 s, rollout 13 s, smoke 3 s; tag w Deployment = `deploy.model_version`;
+    akcje przypięte pełnym SHA, bez sekretów (tylko `GITHUB_TOKEN`)
   - [ ] Próba odtworzenia z instrukcji na świeżym klonie
+  - [ ] Stretch po rdzeniu, do czw 22.10: seedy DistilBERT na walidacji → LLM zero-shot (385)
+    → UI Streamlit → GKE
 - [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
 - [ ] gitleaks + LICENSE → upublicznienie repo (najpóźniej przy wysyłce)
 - [x] **2.10 — zmiana nazwy** repo, pakietu i folderu na `banking77-intent-ml` /
