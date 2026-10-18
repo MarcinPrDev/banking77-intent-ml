@@ -6,6 +6,8 @@ Uruchomienie:
     uv run python scripts/model_release.py unpack dist/<model_version>.tar [--dest KATALOG]
         # weryfikacja (suma z configu, wersja, mapa etykiet, sumy plików) i rozpakowanie do
         # `deploy.artifact_dir` albo do --dest (np. kontrola pobranego assetu)
+    uv run python scripts/model_release.py env >> "$GITHUB_ENV"
+        # MODEL_VERSION, RELEASE_TAG, RELEASE_ASSET z configu dla workflow (jedno źródło wersji)
 
 Kody wyjścia: 0 = OK, 1 = niezgodność albo istniejące archiwum / katalog docelowy.
 """
@@ -36,10 +38,16 @@ def main() -> int:
     unpack = sub.add_parser("unpack", help="zweryfikuj i rozpakuj archiwum")
     unpack.add_argument("archive", type=Path)
     unpack.add_argument("--dest", type=Path, help="katalog docelowy (domyślnie artifact_dir)")
+    sub.add_parser("env", help="wypisz MODEL_VERSION, RELEASE_TAG, RELEASE_ASSET (KLUCZ=wartość)")
     args = parser.parse_args()
 
     settings = load_settings()
     deploy = settings.deploy
+    if args.command == "env":
+        print(f"MODEL_VERSION={deploy.model_version}")
+        print(f"RELEASE_TAG={deploy.release_tag}")
+        print(f"RELEASE_ASSET={deploy.release_asset}")
+        return 0
     try:
         if args.command == "pack":
             archive = REPO_ROOT / "dist" / deploy.release_asset

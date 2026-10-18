@@ -1,0 +1,103 @@
+# Wdrożenie do klastra testowego kind z testem HTTP (W4; rubryka pkt 4) — klaster żyje tylko
+# w czasie runa, to nie produkcja. Przebieg = Quickstart „Klaster kind lokalnie” w README:
+# model z GitHub Release (ADR-0003, opcja a) → obraz CPU → kind → Deployment/Service → smoke.
+# Wersja modelu z configu (deploy.model_version): build-arg, tag obrazu, Deployment, smoke.
+name: Deploy kind
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read  # GITHUB_TOKEN: pobranie assetu z Release prywatnego repo
+
+concurrency:
+  group: deploy-kind-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: banking77-intent-api
+  CLUSTER_NAME: banking77
+  SMOKE_URL: http://localhost:8081  # Service NodePort przez extraPortMappings (k8s/kind/cluster.yaml)
+
+jobs:
+  deploy:
+    # przypięte na czas projektu (jak ci.yaml): ubuntu-latest przechodzi na Ubuntu 26.04 od 19.10.2026
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+        with:
+          version: "0.10.4"  # jak lokalnie i w Dockerfile
+          python-version: "3.11"
+
+      - name: Install dependencies (bez extras — config, weryfikacja artefaktu, smoke)
+        run: uv sync --locked
+
+      - name: Versions from config
+        run: |
+          uv run python scripts/model_release.py env >> "$GITHUB_ENV"
+          uv run python scripts/model_release.py env
+
+      - name: Free disk space
+        # obraz 3,18 GB + archiwum `kind load` + kopia w węźle kind; runner prywatny: 14 GB SSD
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Model from GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$RELEASE_TAG" --pattern "$RELEASE_ASSET" --dir dist
+          uv run python scripts/model_release.py unpack "dist/$RELEASE_ASSET"
+
+      - name: Build image
+        run: |
+          docker build --build-arg MODEL_VERSION="$MODEL_VERSION" -t "$IMAGE_NAME:$MODEL_VERSION" .
+          docker image ls "$IMAGE_NAME"
+          df -h /
+
+      - name: Create kind cluster
+        uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa  # v1.15.1
+        with:
+          version: v0.33.0
+          cluster_name: ${{ env.CLUSTER_NAME }}
+          config: k8s/kind/cluster.yaml
+          ignore_failed_clean: true  # klaster usuwa jawny krok „Teardown” niżej
+
+      - name: Load image into kind
+        run: kind load docker-image "$IMAGE_NAME:$MODEL_VERSION" --name "$CLUSTER_NAME"
+
+      - name: Deploy
+        run: |
+          kubectl apply -f k8s/
+          kubectl set image deployment/banking77-intent-api api="$IMAGE_NAME:$MODEL_VERSION"
+          kubectl rollout status deployment/banking77-intent-api --timeout=300s
+          deployed=$(kubectl get deployment banking77-intent-api \
+            -o jsonpath='{.spec.template.spec.containers[0].image}')
+          echo "Obraz w Deployment: $deployed"
+          test "$deployed" = "$IMAGE_NAME:$MODEL_VERSION"
+          kubectl get pods -l app=banking77-intent-api -o wide
+
+      - name: Smoke HTTP through the Service
+        run: uv run python scripts/smoke_api.py --url "$SMOKE_URL" --timeout 120
+
+      - name: Diagnostics
+        if: failure()
+        run: |
+          kubectl get all -o wide || true
+          kubectl describe deployment/banking77-intent-api || true
+          kubectl describe pods -l app=banking77-intent-api || true
+          kubectl logs -l app=banking77-intent-api --prefix --tail=200 || true
+          df -h /
+
+      - name: Teardown
+        if: always()
+        run: kind delete cluster --name "$CLUSTER_NAME"
