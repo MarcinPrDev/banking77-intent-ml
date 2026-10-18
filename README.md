@@ -486,7 +486,7 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     (kolejność), (2) `--extra gpu` nie instaluje się na macOS — dopisane `--extra cpu`,
     (3) brak opisu odtworzenia treningu i oceny (kolejność skryptów, blokady budżetu) — do decyzji
   - [ ] Stretch po rdzeniu, do czw 22.10:
-    - [x] seedy DistilBERT na walidacji (18.10): tabela w *Wyniki na walidacji*; wniosek — autor
+    - [x] seedy DistilBERT na walidacji (18.10): tabela i wniosek w *Wyniki na walidacji*
     - [ ] LLM zero-shot (385) → UI Streamlit → GKE
 - [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
 - [ ] gitleaks + LICENSE → upublicznienie repo (najpóźniej przy wysyłce)
@@ -533,6 +533,10 @@ sama zamrożona walidacja 8 504 / 1 499, test nietknięty; liczby z MLflow, bada
 
 Odniesienie: MiniLM + kNN (deterministyczny, bez seeda) — macro-F1 91,27% na tej samej
 walidacji. Trening jednego seeda 22–25 s (GPU).
+
+Zmiana seeda nie odwróciła rankingu macro-F1 na tej walidacji: MiniLM + kNN pozostał wyżej
+we wszystkich sześciu przebiegach. To ocena losowości treningu na jednym podziale, nie dowód
+przewagi na nowych danych.
 
 **Wrażliwość na budżet strojenia** (macro-F1 na tej samej zamrożonej walidacji 1 499 zdań,
 jeden seed; liczby z MLflow):
