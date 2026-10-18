@@ -1,0 +1,59 @@
+# API BANKING77 (ADR-0003: DistilBERT na CPU) — decyzje autora 18.10: 2 repliki, requests
+# 500m CPU / 512Mi, limit pamięci 1Gi, bez limitu CPU (zmierzone w kontenerze: 382 MiB RAM).
+# MODEL_VERSION niesie obraz (build-arg z deploy.model_version) — celowo bez `env` tutaj, żeby
+# manifest nie nadpisał wersji z obrazu i smoke porównywał to, co naprawdę jest w obrazie.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: banking77-intent-api
+  labels:
+    app: banking77-intent-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: banking77-intent-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0  # przy aktualizacji zawsze 2 gotowe pody
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: banking77-intent-api
+    spec:
+      containers:
+        - name: api
+          # Tag nadpisuje krok wdrożenia: kubectl set image deployment/banking77-intent-api
+          # api=banking77-intent-api:<deploy.model_version> — źródłem wersji jest config.
+          image: banking77-intent-api:distilbert-v1
+          imagePullPolicy: IfNotPresent  # obraz z `kind load docker-image`, kind nie ma rejestru
+          ports:
+            - name: http
+              containerPort: 8000  # api.port z configs/config.yaml
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+          # /health odpowiada dopiero po załadowaniu i rozgrzaniu modelu (lifespan).
+          startupProbe:  # wolny start (lokalnie ~4 s, runner CI wolniejszy): do 60 × 2 s
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+            failureThreshold: 60
+          readinessProbe:  # ruch z Service tylko do gotowych podów
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:  # po starcie: 3 porażki z rzędu → restart kontenera
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3

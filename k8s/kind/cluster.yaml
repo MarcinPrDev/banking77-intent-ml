@@ -1,0 +1,16 @@
+# Klaster kind dla BANKING77 (W4) — ta sama konfiguracja lokalnie i w CI.
+# To nie jest manifest Kubernetes: czyta go `kind create cluster --config`, nie `kubectl apply`
+# (stąd podkatalog — `kubectl apply -f k8s/` nie wchodzi do podkatalogów).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    # Kubernetes v1.37.0 — domyślny obraz węzła kind v0.33.0, przypięty digestem z release notes
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+    extraPortMappings:
+      # host 127.0.0.1:8081 → węzeł :30080 = nodePort Service (w kind containerPort musi równać się
+      # nodePort); 8081, bo port 8000 na Windows jest zarezerwowany przez system
+      - containerPort: 30080
+        hostPort: 8081
+        listenAddress: "127.0.0.1"
+        protocol: TCP
