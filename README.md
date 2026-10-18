@@ -402,8 +402,10 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     wersji sklearn (`test_persistence`); DistilBERT — obraz instaluje z tego samego `uv.lock`
     (transformers 5.13.0, torch 2.11.0), a smoke porównuje wyniki zdań kontrolnych z ocenionym
     artefaktem (decyzja autora 16.10: bez osobnej kontroli wersji w `load`)
-  - [x] 14.10: decyzja o reficie trzech ścieżek na 10 003 i zapis zamrożonych konfiguracji.
-  - [ ] Tag `experiments-frozen`, refit i pomiary finalnych artefaktów; potem ocena na teście.
+  - [x] Rozgrzewka DistilBERT (18.10): `load` wykonuje predykcję na syntetycznym tekście przed
+    gotowością API. Pomiary kontenera z 15.10 dotyczą wersji sprzed tej zmiany.
+  - Co nie zadziałało: notebook wymagał poprawy typów komórek i uzupełnienia obliczeń dla
+    podanych liczb. Obraz CPU pozostał duży (3,18 GB), bo zachowano zależności treningu i analizy.
 - [ ] W4 (24–25.10): kind + workflow CI + test HTTP + odtworzenie z instrukcji
 - [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
 - [ ] gitleaks + LICENSE → upublicznienie repo (najpóźniej przy wysyłce)
@@ -416,6 +418,7 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
   nadwyżki = świadome nadgodziny albo cięcie wg kolejności z *Bramka po W1 i fallback*;
   aktualizacja na koniec każdego slotu)
   - W2 (12–14.10): **14 h pracy przy budżecie 14 h — 0 h nadwyżki**; rezerwa nadal zużyta 8 z 8 h.
+  - W3 (14–18.10): **14 h pracy przy budżecie 14 h — 0 h nadwyżki**; rezerwa nadal zużyta 8 z 8 h.
 
 **Wyniki na walidacji** (W1–W2; zamrożona walidacja z manifestu — do wyboru konfiguracji,
 nie do porównań z literaturą; wszystkie liczby z MLflow):

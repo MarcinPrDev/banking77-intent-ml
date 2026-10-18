@@ -79,10 +79,12 @@ Bez pobierania wag przy starcie ani podczas predykcji.
 Trening w CI odrzucamy: tworzyłby nowy artefakt.
 GCS odrzucamy: dodatkowa infrastruktura i uprawnienia poza minimum.
 
-Test przeniesienia na ustalonych przykładach z dawnej walidacji:
-te same id lokalnie i w obrazie CPU, score z tolerancją.
-To kontrola techniczna, nie ocena jakości. Obliczenia CPU i GPU mogą się różnić.
-Bez ponownej oceny na teście.
+Test przeniesienia na 50 przykładach z dawnej walidacji wykonano jednorazowo 15.10:
+te same id w 50 z 50, różnica score nie większa niż 0,0000003.
+W CI używamy 14 zdań kontrolnych napisanych na potrzeby smoke, spoza BANKING77.
+Oczekiwane wyniki ocenionego artefaktu zapisano w configs/smoke_cases.json;
+porównujemy id, wersję i score z tolerancją zapisaną w tym pliku.
+To kontrola techniczna, nie ocena jakości. Bez ponownej oceny na teście.
 
 ## Konsekwencje
 
