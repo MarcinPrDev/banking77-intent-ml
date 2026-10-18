@@ -161,7 +161,8 @@ czas treningu, rozmiar artefaktu. **Wybrany model (ADR-0003, 15.10): DistilBERT*
 artefakt z refitu w `models/final/distilbert`, bez kopiowania. Sekcja `deploy` w configu
 (`model_version: distilbert-v1`, `artifact_dir`) — jedno źródło dla build-arg obrazu, tagu,
 manifestu k8s i odpowiedzi `/health` (`MODEL_VERSION`; bez tej zmiennej API zwraca
-`deploy.model_version`). Manifest z hashami plików powstaje przy pakowaniu do Release (W4).
+`deploy.model_version`). Manifest z hashami plików powstaje przy pakowaniu do Release
+(`scripts/model_release.py pack`, W4).
 Artefakt jest **wpiekany w obraz CPU podczas `docker build`** (bez pobierania na starcie
 kontenera — brak cold startu i uprawnień runtime). Tag obrazu zawiera wersję modelu.
 
@@ -172,7 +173,17 @@ pobranych przez `fetch_data.py --only train` (bez `test.csv`; działa tylko dla 
 splitu niesie tylko hash, więc w CI trzeba odtworzyć podział `make_splits` i porównać hash
 z manifestem — albo refitować na całych 10 003 bez podziału) — odrzucone, bo tworzy nowy
 artefakt; (c) GCS (tylko jeśli GCP wejdzie jako stretch) — odrzucone. W4 implementuje (a).
-Wybrany DistilBERT wymaga torcha CPU w obrazie — rozmiar i czas budowy **do zmierzenia**.
+Wybrany DistilBERT wymaga torcha CPU w obrazie — rozmiar 3,18 GB (W3); czas budowy od zera
+— do zmierzenia w CI.
+
+**Release `distilbert-v1` (18.10):**
+[github.com/MarcinPrDev/banking77-intent-ml/releases/tag/distilbert-v1](https://github.com/MarcinPrDev/banking77-intent-ml/releases/tag/distilbert-v1)
+— tag na `d809c57` (commit refitu, `experiments-frozen`), asset `distilbert-v1.tar`
+(268 789 760 B), SHA-256 w `deploy.release_sha256`. Archiwum: niezmienione pliki
+`models/final/distilbert` + `manifest.json` (SHA-256 każdego pliku, hash mapy etykiet, wersje
+bibliotek, runy refit `5b883a97` i ocena `fb0d0bde`); tar bez kompresji z ustalonymi
+metadanymi — te same pliki dają tę samą sumę. `scripts/model_release.py unpack` sprawdza sumę
+archiwum, wersję, mapę etykiet, skład archiwum i sumę każdego pliku.
 
 **MiniLM+kNN (niewybrany w ADR-0003; opis zostaje dla porządku):** adapter zapisuje indeks kNN i metadane, a wagi enkodera
 z przypiętej rewizji pozostają w cache Hugging Face. Obraz musi zawierać również enkoder:
@@ -208,11 +219,13 @@ na Windows zarezerwowany przez system, stąd 8080; dokumentacja endpointów: `ht
 uv run uvicorn banking77_intent_ml.api.app:create_app --factory --port 8080
 ```
 
-**Obraz Docker CPU** (W3) — wymaga artefaktu `models/final/distilbert` (refit:
-`uv run python scripts/refit_final.py`; w W4 artefakt z GitHub Release); `MODEL_VERSION` =
-`deploy.model_version` z configu:
+**Obraz Docker CPU** (W3) — wymaga artefaktu `models/final/distilbert`: z GitHub Release
+(niżej; `gh` zalogowany na konto z dostępem do repo) albo z refitu
+(`uv run python scripts/refit_final.py`); `MODEL_VERSION` = `deploy.model_version` z configu:
 
 ```bash
+gh release download distilbert-v1 -p distilbert-v1.tar -D dist
+uv run python scripts/model_release.py unpack dist/distilbert-v1.tar   # weryfikacja → models/final/distilbert
 docker build --build-arg MODEL_VERSION=distilbert-v1 -t banking77-intent-api:distilbert-v1 .
 docker run --rm -p 8080:8000 banking77-intent-api:distilbert-v1
 uv run python scripts/smoke_api.py --url http://localhost:8080   # drugi terminal: smoke
@@ -432,7 +445,11 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     autora — 2 repliki, requests 500m CPU / 512Mi, limit pamięci 1Gi bez limitu CPU, Service
     NodePort; utworzenie klastra 54 s, `kind load` 54 s, rollout 4 s, smoke [OK] przez NodePort,
     ruch na obie repliki (19/16 żądań), pamięć podów 381/377 MiB, bez restartów
-  - [ ] Model w CI z GitHub Release + SHA-256 w configu (ADR-0003, opcja a)
+  - [x] Model w GitHub Release (18.10; ADR-0003, opcja a): Release `distilbert-v1`, asset
+    268 789 760 B, SHA-256 w `deploy.release_sha256`; `scripts/model_release.py pack/unpack`
+    (manifest: sumy plików, mapa etykiet, wersje bibliotek, runy refit `5b883a97` i ocena
+    `fb0d0bde`); pobranie z GitHuba i weryfikacja: 5 plików bajt w bajt zgodnych z ocenionym
+    artefaktem. Użycie w workflow — w `deploy-kind.yaml`
   - [ ] Workflow `deploy-kind.yaml` zielony na `main` (link do runa)
   - [ ] Próba odtworzenia z instrukcji na świeżym klonie
 - [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
