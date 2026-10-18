@@ -375,8 +375,8 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
   - Co nie zadziałało: weekend 10–11.10 bez pracy, więc W2 przesunął się na 12–14.10.
     Czas zabrały też problemy środowiska: czerwone CI po imporcie `sentence-transformers`,
     brak `accelerate`, zmiany API w `transformers` 5 i puste `CUDA_VISIBLE_DEVICES` na Windows.
-- [ ] W3 (plan 12–18.10, realizacja od 14.10): zamrożenie, ocena końcowa, analiza błędów,
-  artefakt, testy, Docker
+- [x] **W3** (plan 12–18.10, realizacja 14–18.10; zamknięty 18.10): zamrożenie, ocena końcowa,
+  analiza błędów, artefakt, testy, Docker
   - [x] Zamrożenie (14.10): ADR-0002 (protokół z W1 + refit przed testem), tag
     `experiments-frozen` na `d809c57`
   - [x] Refit na 10 003 (14.10): runy `final_refit`, artefakty w `models/final/`; koszt
