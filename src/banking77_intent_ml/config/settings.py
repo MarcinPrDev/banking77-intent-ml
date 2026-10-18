@@ -204,6 +204,17 @@ class DeployConfig:
     model_version: str  # wersja wdrażanego artefaktu: /health, tag obrazu, tag Release (ADR-0003)
     artifact_dir: Path  # katalog artefaktu serwowanego przez API
     smoke_cases: Path  # zdania kontrolne i oczekiwane wyniki artefaktu (scripts/smoke_api.py)
+    release_sha256: str  # SHA-256 archiwum artefaktu w GitHub Release (W4, models/release.py)
+
+    @property
+    def release_tag(self) -> str:
+        """Tag GitHub Release z artefaktem = wersja modelu (jedno źródło wersji)."""
+        return self.model_version
+
+    @property
+    def release_asset(self) -> str:
+        """Nazwa archiwum artefaktu w Release."""
+        return f"{self.model_version}.tar"
 
 
 @dataclass(frozen=True)
@@ -367,5 +378,6 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
             model_version=str(raw["deploy"]["model_version"]),
             artifact_dir=_abs(raw["deploy"]["artifact_dir"]),
             smoke_cases=_abs(raw["deploy"]["smoke_cases"]),
+            release_sha256=str(raw["deploy"]["release_sha256"]).lower(),
         ),
     )

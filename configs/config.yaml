@@ -214,3 +214,6 @@ deploy:                                    # ADR-0003 (15.10.2026) — jedno źr
   model_version: distilbert-v1             # /health i /predict, build-arg i tag obrazu, tag Release (W4)
   artifact_dir: models/final/distilbert    # oceniony artefakt (refit 5b883a97, ocena fb0d0bde), bez kopiowania
   smoke_cases: configs/smoke_cases.json    # zdania kontrolne (nie ze zbioru) + oczekiwane wyniki artefaktu; scripts/smoke_api.py --record
+  # W4: artefakt w CI z GitHub Release (ADR-0003, opcja a) — tag = model_version, asset = <model_version>.tar;
+  # suma archiwum ze `scripts/model_release.py pack` (te same pliki => ta sama suma)
+  release_sha256: ee3c56d8117ca8b1d6ab9cd9c736a2027de2e97b3f4b908bceed27cf0060b544
