@@ -27,7 +27,7 @@ from banking77_intent_ml.evaluation.llm_eval import (
     run_test,
     run_val,
 )
-from banking77_intent_ml.models.llm import CachedClient, LiteLLMClient
+from banking77_intent_ml.models.llm import CachedClient, LiteLLMClient, LlmRateLimitError
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -70,7 +70,10 @@ def main() -> None:
             _fail(f"wariant {args.prompt} ma już {done} run(y) na walidacji — budżet: raz")
         data = load_train_val(settings)
         client = _client(settings)
-        run_id, result, usage = run_val(args.prompt, data, client, settings)
+        try:
+            run_id, result, usage = run_val(args.prompt, data, client, settings)
+        except LlmRateLimitError as exc:
+            _fail(f"{exc} (zapytań wysłanych w tym przebiegu: {client.calls}; runu brak)")
         scope = f"walidacja ({int(result.n_samples)} zdań)"
     else:
         name = cfg.frozen_prompt
@@ -86,7 +89,10 @@ def main() -> None:
         if done:
             _fail(f"w MLflow jest już {done} run testowy LLM — ocena na teście raz")
         client = _client(settings)
-        run_id, result, usage = run_test(client, settings)
+        try:
+            run_id, result, usage = run_test(client, settings)
+        except LlmRateLimitError as exc:
+            _fail(f"{exc} (zapytań wysłanych w tym przebiegu: {client.calls}; runu brak)")
         scope = f"test 385 ({int(result.n_samples)} wiadomości), prompt {name}"
 
     print(f"[OK] LLM {cfg.model}, {scope}: accuracy {result.accuracy:.4f}, "

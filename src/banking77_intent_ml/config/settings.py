@@ -193,6 +193,9 @@ class LlmConfig:
     max_completion_tokens: int = 1024
     price_input_usd_per_mtok: float = 0.0
     price_output_usd_per_mtok: float = 0.0
+    tokens_per_minute: int = 0  # 0 = bez dławienia
+    max_retries: int = 0
+    max_wait_s: float = 120.0
     val_per_class: int = 5
     prompts: dict[str, str] = field(default_factory=dict)  # wariant -> szablon {labels} {text}
     frozen_prompt: str | None = None
@@ -379,6 +382,9 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
             max_completion_tokens=int(llm["max_completion_tokens"]),
             price_input_usd_per_mtok=float(llm["price_usd_per_mtok"]["input"]),
             price_output_usd_per_mtok=float(llm["price_usd_per_mtok"]["output"]),
+            tokens_per_minute=int(llm["tokens_per_minute"]),
+            max_retries=int(llm["max_retries"]),
+            max_wait_s=float(llm["max_wait_s"]),
             val_per_class=int(llm["val_per_class"]),
             prompts={str(name): str(text or "") for name, text in llm["prompts"].items()},
             frozen_prompt=llm["frozen_prompt"],

@@ -206,6 +206,12 @@ llm:
   price_usd_per_mtok:
     input: 0.075
     output: 0.30
+  # Limity Groq dla organizacji (19.10.2026: 429 przy 8000 tokenów/min, plan on_demand). Klient
+  # dławi tokeny do ~90% limitu na minutę i czeka wg retry-after; czekanie > max_wait_s (np. limit
+  # dzienny) = przerwanie z komunikatem — wznowienie później, odpowiedzi zostają w cache.
+  tokens_per_minute: 8000
+  max_retries: 8
+  max_wait_s: 120
   n_eval: 385                              # 5 na klasę x 77 — te same wiadomości dla WSZYSTKICH modeli
   per_class: 5
   # 385 id testu (5/klasę) wybrane Z GÓRY, przed treningiem. Sposób losowania (seed, stratyfikacja

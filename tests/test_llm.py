@@ -9,8 +9,10 @@ CLI odmawia przed jakimkolwiek zapytaniem. Nie dowodzą jakości promptu ani mod
 from __future__ import annotations
 
 import importlib.util
+import sys
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -23,10 +25,13 @@ from banking77_intent_ml.evaluation.final import TestSet as _TestSet  # bez zbie
 from banking77_intent_ml.models.llm import (
     INVALID_ID,
     CachedClient,
+    LiteLLMClient,
     LlmPredictions,
+    LlmRateLimitError,
     LlmReply,
     parse_label,
     render_prompt,
+    retry_after_s,
     usage_metrics,
 )
 
@@ -207,3 +212,103 @@ def test_cli_refuses_before_any_request(
 
     assert exc.value.code == 1
     assert message in capsys.readouterr().out
+
+
+# --- Limity API (19.10): czekanie po 429 i dławienie tokenów na minutę -----------------------
+
+
+class _FakeRateLimit(Exception):
+    def __init__(self, message: str, headers: dict | None = None):
+        super().__init__(message)
+        self.headers = headers or {}
+
+
+def _response(text: str, prompt_tokens: int = 500, completion_tokens: int = 20):
+    message = SimpleNamespace(content=text)
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=message)],
+        usage=SimpleNamespace(prompt_tokens=prompt_tokens, completion_tokens=completion_tokens),
+    )
+
+
+@pytest.fixture
+def fake_litellm(monkeypatch):
+    """Podstawiony moduł `litellm`: kolejka odpowiedzi albo wyjątków, zapis argumentów wywołań."""
+    queue: list = []
+    calls: list[dict] = []
+
+    def completion(**kwargs):
+        calls.append(kwargs)
+        item = queue.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+    module = SimpleNamespace(completion=completion, RateLimitError=_FakeRateLimit)
+    monkeypatch.setitem(sys.modules, "litellm", module)
+    return queue, calls
+
+
+class _FakeTime:
+    def __init__(self):
+        self.now = 0.0
+        self.sleeps: list[float] = []
+
+    def clock(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+def _limits(settings, **changes):
+    return replace(settings, llm=replace(settings.llm, **changes))
+
+
+def test_retry_after_reads_header_then_message_hint():
+    assert retry_after_s(_FakeRateLimit("x", {"Retry-After": "3"})) == 3.0
+    assert retry_after_s(_FakeRateLimit("Please try again in 862.5ms.")) == pytest.approx(0.8625)
+    assert retry_after_s(_FakeRateLimit("Please try again in 2.235s.")) == pytest.approx(2.235)
+    assert retry_after_s(_FakeRateLimit("try again in 1m2.5s")) == pytest.approx(62.5)
+    assert retry_after_s(_FakeRateLimit("try again in 1h12m3s")) == pytest.approx(4323)
+    assert retry_after_s(_FakeRateLimit("bez wskazówki")) is None
+
+
+def test_client_waits_after_429_and_retries(llm_settings, fake_litellm):
+    queue, calls = fake_litellm
+    queue += [_FakeRateLimit("TPM ... try again in 2.235s."), _response("card_arrival")]
+    clock = _FakeTime()
+    client = LiteLLMClient(_limits(llm_settings, max_retries=3), clock=clock.clock,
+                           sleep=clock.sleep)
+
+    reply = client.complete("prompt")
+
+    assert reply.text == "card_arrival" and len(calls) == 2
+    assert clock.sleeps == [pytest.approx(2.235)]
+    assert calls[0]["include_reasoning"] is False and calls[0]["temperature"] == 0.0
+
+
+def test_client_stops_when_wait_exceeds_limit(llm_settings, fake_litellm):
+    queue, calls = fake_litellm
+    queue += [_FakeRateLimit("tokens per day (TPD) ... try again in 1h2m0s.")]
+    clock = _FakeTime()
+    client = LiteLLMClient(_limits(llm_settings, max_retries=3, max_wait_s=120),
+                           clock=clock.clock, sleep=clock.sleep)
+
+    with pytest.raises(LlmRateLimitError, match="wznów później"):
+        client.complete("prompt")
+    assert clock.sleeps == [] and len(calls) == 1
+
+
+def test_client_throttles_tokens_per_minute(llm_settings, fake_litellm):
+    queue, _ = fake_litellm
+    queue += [_response("a", 500, 20), _response("b", 500, 20)]
+    clock = _FakeTime()
+    client = LiteLLMClient(_limits(llm_settings, tokens_per_minute=1000), clock=clock.clock,
+                           sleep=clock.sleep)
+
+    client.complete("p1")
+    client.complete("p2")  # 520 + 520 > 900 (90% z 1000) -> czeka na koniec okna
+
+    assert clock.sleeps == [pytest.approx(60.0)]

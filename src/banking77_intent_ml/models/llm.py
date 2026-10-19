@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
-from collections.abc import Sequence
+from collections import deque
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Protocol
@@ -42,11 +44,71 @@ class LLMClient(Protocol):
     def complete(self, prompt: str) -> LlmReply: ...
 
 
-class LiteLLMClient:
-    """Jedno zapytanie = jedna wiadomość użytkownika (Groq: instrukcje w wiadomości użytkownika)."""
+class LlmRateLimitError(RuntimeError):
+    """Limit API, którego nie da się przeczekać w rozsądnym czasie (np. dzienny) — wznów później."""
 
-    def __init__(self, settings: Settings) -> None:
+
+_WAIT_HINT = re.compile(r"try again in ((?:\d+h)?(?:\d+m(?!s))?(?:[\d.]+(?:ms|s))?)")
+_UNIT_S = {"h": 3600.0, "m": 60.0, "s": 1.0, "ms": 0.001}
+
+
+def retry_after_s(error: Exception) -> float | None:
+    """Czas oczekiwania z błędu 429: nagłówek `retry-after` albo „try again in 1m2.5s”."""
+    headers = {key.lower(): value for key, value in (getattr(error, "headers", None) or {}).items()}
+    if "retry-after" in headers:
+        try:
+            return float(headers["retry-after"])
+        except ValueError:
+            pass
+    match = _WAIT_HINT.search(str(error))
+    if not match or not match.group(1):
+        return None
+    parts = re.findall(r"([\d.]+)(h|ms|m|s)", match.group(1))
+    return sum(float(amount) * _UNIT_S[unit] for amount, unit in parts)
+
+
+class _TokenWindow:
+    """Tokeny wysłane w ostatnich 60 s — dławienie do ~90% limitu tokenów na minutę."""
+
+    def __init__(self, per_minute: int, clock: Callable[[], float], sleep: Callable[[float], None]):
+        self._budget = 0.9 * per_minute
+        self._clock, self._sleep = clock, sleep
+        self._entries: deque[tuple[float, int]] = deque()
+
+    def wait_for(self, tokens: int) -> None:
+        if self._budget <= 0:
+            return
+        while True:
+            now = self._clock()
+            while self._entries and self._entries[0][0] <= now - 60:
+                self._entries.popleft()
+            if not self._entries or sum(t for _, t in self._entries) + tokens <= self._budget:
+                return
+            self._sleep(self._entries[0][0] + 60 - now)
+
+    def add(self, tokens: int) -> None:
+        self._entries.append((self._clock(), tokens))
+
+
+class LiteLLMClient:
+    """Jedno zapytanie = jedna wiadomość użytkownika (Groq: instrukcje w wiadomości użytkownika).
+
+    Dławi tokeny do `llm.tokens_per_minute`; po 429 czeka wg `retry_after_s` (bez wskazówki:
+    2, 4, 8… s) najwyżej `max_retries` razy; czekanie > `max_wait_s` (limit dzienny) =
+    `LlmRateLimitError`. Latencja = czas udanego wywołania, bez czekania.
+    """
+
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
         self._cfg = settings.llm
+        self._sleep = sleep
+        self._window = _TokenWindow(self._cfg.tokens_per_minute, clock, sleep)
+        self._last_tokens = 0  # szacunek następnego zapytania = ostatnie zużycie
 
     def complete(self, prompt: str) -> LlmReply:
         import litellm  # extra `llm`; reszta projektu działa bez niego
@@ -59,18 +121,36 @@ class LiteLLMClient:
         }
         if cfg.reasoning_effort:
             params["reasoning_effort"] = cfg.reasoning_effort
-        start = time.perf_counter()
-        response = litellm.completion(
-            model=cfg.model, messages=[{"role": "user", "content": prompt}], **params
-        )
-        latency_s = time.perf_counter() - start
-        usage = response.usage
-        return LlmReply(
-            text=response.choices[0].message.content or "",
-            prompt_tokens=int(usage.prompt_tokens),
-            completion_tokens=int(usage.completion_tokens),
-            latency_s=latency_s,
-        )
+        for attempt in range(cfg.max_retries + 1):
+            self._window.wait_for(self._last_tokens)
+            start = time.perf_counter()
+            try:
+                response = litellm.completion(
+                    model=cfg.model, messages=[{"role": "user", "content": prompt}], **params
+                )
+            except litellm.RateLimitError as error:
+                wait = retry_after_s(error)
+                wait = min(2.0 ** (attempt + 1), cfg.max_wait_s) if wait is None else wait
+                if attempt == cfg.max_retries or wait > cfg.max_wait_s:
+                    raise LlmRateLimitError(
+                        f"limit API: czekanie {wait:.0f} s (limit {cfg.max_wait_s:.0f} s), "
+                        f"próba {attempt + 1}/{cfg.max_retries + 1} — wznów później; "
+                        "odpowiedzi zostają w cache"
+                    ) from error
+                self._sleep(wait)
+                continue
+            latency_s = time.perf_counter() - start
+            usage = response.usage
+            reply = LlmReply(
+                text=response.choices[0].message.content or "",
+                prompt_tokens=int(usage.prompt_tokens),
+                completion_tokens=int(usage.completion_tokens),
+                latency_s=latency_s,
+            )
+            self._last_tokens = reply.prompt_tokens + reply.completion_tokens
+            self._window.add(self._last_tokens)
+            return reply
+        raise AssertionError("nieosiągalne")  # pętla zawsze kończy się return albo raise
 
 
 class CachedClient:
