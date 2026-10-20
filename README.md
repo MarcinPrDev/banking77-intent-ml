@@ -553,7 +553,7 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     - [x] seedy DistilBERT na walidacji (18.10): tabela i wniosek w *Wyniki na walidacji*
     - [x] LLM zero-shot (20.10): plan Groq Developer (decyzja autora; limity 250 000 tokenów/min
       zamiast 8 000), walidacja v1 i v2, zamrożony v2, test 385 raz — tabela przy ocenie
-      końcowej; wniosek — autor
+      końcowej wraz z wnioskiem
     - [ ] UI Streamlit → GKE
 - [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
 - [ ] gitleaks + LICENSE → upublicznienie repo (najpóźniej przy wysyłce)
@@ -714,6 +714,12 @@ raz). Te same 385 wiadomości (5 na klasę, wybrane w W1) dla wszystkich ścież
 | MiniLM + kNN | 91,69% | 91,57% | — | tabela końcowa (CPU) | `04ec980a` |
 | TF-IDF + LR | 91,17% | 91,12% | — | tabela końcowa (CPU) | `0c08edb4` |
 | LLM zero-shot (prompt v2) | 80,78% | 79,67% | 3 | 0,0213 USD za 385 zapytań; p50 0,15 s / p95 0,65 s przez API | `219ab1e3` |
+
+LLM zero-shot był tani w użyciu (całe badanie około 0,064 USD), ale uzyskał niższe accuracy
+i macro-F1 niż wszystkie trzy modele uczone na BANKING77. Błędy formatu to tylko 3 z 74
+pomyłek, więc główny problem to wybór intencji. DistilBERT wyprzedził kNN o jedną poprawną
+odpowiedź; nie uznajemy tej różnicy za dowód stabilnej przewagi. Wniosek o LLM dotyczy
+badanego modelu z promptem v2, nie wszystkich modeli zero-shot.
 
 Dobór promptu na walidacji (ta sama próbka 385 zdań, 5 na klasę, seed `split.random_state`):
 v1 — accuracy 79,74%, macro-F1 79,71%, 2 błędy formatu (run `526e5400`); **v2** — 81,30% /
