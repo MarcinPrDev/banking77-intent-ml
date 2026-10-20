@@ -317,6 +317,11 @@ Skrypty B drukują zwycięzcę jako fragment YAML — configu nie zmieniamy: kon
 14.10, przed testem (ADR-0002). Inny zwycięzca to wniosek do raportu, nie powód do nowego
 strojenia.
 
+**Stretch LLM** (opcjonalnie; klucz `GROQ_API_KEY` w `.env`, środowisko z `--extra llm`, płatne
+API): `llm_zero_shot.py --stage val --prompt v1`, `--prompt v2`, potem `--stage test` z
+`llm.frozen_prompt` z configu. Blokady jak wyżej: każdy wariant raz na walidacji, test raz w
+magazynie; odpowiedzi w cache `dane/cache/llm` (przerwany przebieg bez ponownego kosztu).
+
 ## Plan — 5 slotów, 60 h (30.09 → 31.10.2026)
 
 Podział pracy: dane/protokół/EDA **10 h** · modele/HPO **12 h** · ewaluacja i analiza błędów **6 h**
@@ -546,7 +551,10 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     przebiegiem od zera
   - [ ] Stretch po rdzeniu, do czw 22.10:
     - [x] seedy DistilBERT na walidacji (18.10): tabela i wniosek w *Wyniki na walidacji*
-    - [ ] LLM zero-shot (385) → UI Streamlit → GKE
+    - [x] LLM zero-shot (20.10): plan Groq Developer (decyzja autora; limity 250 000 tokenów/min
+      zamiast 8 000), walidacja v1 i v2, zamrożony v2, test 385 raz — tabela przy ocenie
+      końcowej; wniosek — autor
+    - [ ] UI Streamlit → GKE
 - [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
 - [ ] gitleaks + LICENSE → upublicznienie repo (najpóźniej przy wysyłce)
 - [x] **2.10 — zmiana nazwy** repo, pakietu i folderu na `banking77-intent-ml` /
@@ -689,10 +697,30 @@ Artefakt MiniLM + kNN = indeks 10 003 wektorów + wagi enkodera z cache Hugging 
   Mały wpływ wykrytego pokrycia train/test na wynik ogólny.
 
 Źródło: runy `fb0d0bde`, `04ec980a`, `0c08edb4` z commita `6cae45d`; jedna ocena na ścieżkę.
-Wyniki na 385 przykładach pozostają w MLflow, do raportu razem z LLM.
+Wyniki na 385 przykładach — niżej, razem z LLM (stretch 2, 20.10).
 DistilBERT wybrano do wdrożenia po obejrzeniu wyników testu, z uwzględnieniem kosztów.
 93,02% to wynik zamrożonego modelu, ale nie niezależne potwierdzenie tego wyboru.
 Wybór spośród trzech modeli zamrożonych przed testem; po ocenie bez dalszego strojenia.
+
+**LLM zero-shot na 385 wiadomościach testu** (stretch 2, 20.10; decyzje autora:
+`groq/openai/gpt-oss-20b`, temperatura 0, `reasoning_effort` low; odpowiedź = dokładnie jedna
+nazwa etykiety, inaczej błąd formatu liczony jako pomyłka; prompt dobrany na walidacji, test
+raz). Te same 385 wiadomości (5 na klasę, wybrane w W1) dla wszystkich ścieżek; metryki
+`llm385_*` z MLflow:
+
+| Ścieżka | Acc (385) | Macro-F1 (385) | Błędy formatu | Koszt i latencja | Run |
+|---|---:|---:|---:|---|---|
+| DistilBERT | 91,95% | 92,02% | — | tabela końcowa (CPU) | `fb0d0bde` |
+| MiniLM + kNN | 91,69% | 91,57% | — | tabela końcowa (CPU) | `04ec980a` |
+| TF-IDF + LR | 91,17% | 91,12% | — | tabela końcowa (CPU) | `0c08edb4` |
+| LLM zero-shot (prompt v2) | 80,78% | 79,67% | 3 | 0,0213 USD za 385 zapytań; p50 0,15 s / p95 0,65 s przez API | `219ab1e3` |
+
+Dobór promptu na walidacji (ta sama próbka 385 zdań, 5 na klasę, seed `split.random_state`):
+v1 — accuracy 79,74%, macro-F1 79,71%, 2 błędy formatu (run `526e5400`); **v2** — 81,30% /
+81,47%, 4 błędy (run `081d183e`); zamrożony v2 wg macro-F1 (decyzja autora 20.10). Tokeny na
+teście: 215 396 wejścia / 17 285 wyjścia (ok. 560 na zapytanie — lista 77 etykiet w promptcie).
+Latencja LLM obejmuje sieć i kolejkę API, więc nie porównuje się wprost z pomiarami CPU modeli
+lokalnych. Ekspozycja modelu na benchmark nieustalona — wynik nie dowodzi generalizacji.
 
 ## Analiza błędów (W3)
 
