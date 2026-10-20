@@ -255,7 +255,9 @@ llm:
       <message>
       {text}
       </message>
-  frozen_prompt: null                      # wpis autora po doborze na walidacji: v1 albo v2
+  # Decyzja autora 20.10.2026: v2 — wyższe macro-F1 na walidacji (0,8147 vs 0,7971; runy
+  # 081d183e i 526e5400, ta sama próbka 385 zdań).
+  frozen_prompt: v2
 
 mlflow:
   # tracking_uri i artifact_location NIE są kluczami configu — settings wyprowadza je z paths
