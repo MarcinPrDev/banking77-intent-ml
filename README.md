@@ -215,7 +215,7 @@ uv run ruff check .
 # Po każdym sync na maszynie z GPU: python -c "import torch; print(torch.cuda.is_available())"
 # gpu = torch z indeksu cu128 (RTX 5080/sm_120) + transformers; nlp = sentence-transformers;
 # serving = fastapi, uvicorn, httpx (API od W2); llm (stretch A): dodatkowo --extra llm
-# + GROQ_API_KEY w .env (poza gitem)
+# + GROQ_API_KEY w .env (poza gitem); ui (stretch 3, Streamlit): dodatkowo --extra ui
 # Bez GPU NVIDIA albo na macOS: zamiast --extra gpu użyj --extra cpu (torch 2.11.0 z indeksu CPU,
 # jak w obrazie; koła cu128 są tylko dla Linuksa i Windows). Wystarcza do testów, API i obrazu;
 # trening DistilBERT wymaga --extra gpu (accelerate + CUDA).
@@ -234,6 +234,14 @@ na Windows zarezerwowany przez system, stąd 8080; dokumentacja endpointów: `ht
 
 ```bash
 uv run uvicorn banking77_intent_ml.api.app:create_app --factory --port 8080
+```
+
+**UI demo** (stretch 3, `--extra ui`) — Streamlit nad działającym API: formularz, stan
+`/health`, wynik `/predict`; model zostaje w API. Adres API w panelu bocznym (domyślnie
+`ui.api_url` z configu = `http://localhost:8080`; dla kind `http://localhost:8081`):
+
+```bash
+uv run streamlit run src/banking77_intent_ml/ui/app.py
 ```
 
 **Obraz Docker CPU** (W3) — z artefaktem pobranym wyżej; `MODEL_VERSION` = `deploy.model_version`
@@ -554,7 +562,11 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     - [x] LLM zero-shot (20.10): plan Groq Developer (decyzja autora; limity 250 000 tokenów/min
       zamiast 8 000), walidacja v1 i v2, zamrożony v2, test 385 raz — tabela przy ocenie
       końcowej wraz z wnioskiem
-    - [ ] UI Streamlit → GKE
+    - [x] UI Streamlit (21.10): `src/banking77_intent_ml/ui/` — cienki klient API (formularz,
+      `/health`, `/predict`, czytelne błędy 422 i braku połączenia), extra `ui` (streamlit
+      1.66.1), 4 testy (Streamlit AppTest z atrapą API); sprawdzone na żywo z lokalnym API:
+      wymyślona wiadomość o nieotrzymanej karcie → `card_arrival`, score 0,986
+    - [ ] GKE (stretch 4)
 - [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
 - [ ] gitleaks + LICENSE → upublicznienie repo (najpóźniej przy wysyłce)
 - [x] **2.10 — zmiana nazwy** repo, pakietu i folderu na `banking77-intent-ml` /

@@ -53,6 +53,9 @@ cpu = [
     "torch==2.11.0",                     # ta sama wersja co trening i ocena na teście (2.11.0+cu128)
     "transformers>=4.44",
 ]
+ui = [
+    "streamlit>=1.66.1",
+]
 
 [tool.uv]
 conflicts = [

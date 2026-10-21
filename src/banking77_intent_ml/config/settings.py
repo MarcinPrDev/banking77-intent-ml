@@ -233,6 +233,11 @@ class DeployConfig:
 
 
 @dataclass(frozen=True)
+class UiConfig:
+    api_url: str  # adres API dla UI Streamlit (stretch 3); nadpisanie: BANKING77_API_URL
+
+
+@dataclass(frozen=True)
 class ApiConfig:
     model: str  # strategia z `models.factory.STRATEGIES`; artefakt w `paths.models_dir/<model>`
     max_text_chars: int  # dłuższy tekst -> 422 (pusty i same spacje też)
@@ -252,6 +257,7 @@ class Settings:
     mlflow: MlflowConfig
     api: ApiConfig
     deploy: DeployConfig
+    ui: UiConfig
 
 
 def _resolve_config_path(config_path: str | Path | None) -> Path:
@@ -407,4 +413,5 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
             smoke_cases=_abs(raw["deploy"]["smoke_cases"]),
             release_sha256=str(raw["deploy"]["release_sha256"]).lower(),
         ),
+        ui=UiConfig(api_url=str(raw["ui"]["api_url"])),
     )
