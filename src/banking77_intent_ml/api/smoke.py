@@ -48,7 +48,7 @@ CONTROL_TEXTS = (  # zdania kontrolne napisane na potrzeby smoke — nie pochodz
 
 
 def http_request(base_url: str, timeout_s: float = 30.0) -> Request:
-    """Klient urllib dla `base_url` (np. http://localhost:8080); błędy HTTP zwraca jako kod."""
+    """Klient urllib dla `base_url` (np. http://localhost:18080); błędy HTTP zwraca jako kod."""
     def request(method: str, path: str, body: dict | None = None) -> tuple[int, Any]:
         data = json.dumps(body).encode("utf-8") if body is not None else None
         req = urllib.request.Request(

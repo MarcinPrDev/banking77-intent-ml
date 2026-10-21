@@ -281,6 +281,6 @@ deploy:                                    # ADR-0003 (15.10.2026) — jedno źr
 
 ui:
   # Stretch 3 (W4, 21.10.2026): prosty UI Streamlit nad API — klient HTTP, model zostaje w API.
-  # Domyślnie API lokalnie (README: port 8080 na Windows); kind: http://localhost:8081.
+  # Domyślnie API lokalnie (README: port 18080); kind: http://localhost:18081.
   # Nadpisanie: zmienna BANKING77_API_URL albo pole w panelu bocznym UI.
-  api_url: http://localhost:8080
+  api_url: http://localhost:18080

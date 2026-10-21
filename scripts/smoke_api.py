@@ -1,7 +1,7 @@
 """Smoke działającego API (W3 N3; W4: po deployu do kind) — cienkie CLI.
 
 Uruchomienie:
-  uv run python scripts/smoke_api.py --url http://localhost:8080   # sprawdza usługę
+  uv run python scripts/smoke_api.py --url http://localhost:18080  # sprawdza usługę
   uv run python scripts/smoke_api.py --record                      # nagrywa oczekiwane wyniki
 Tryb sprawdzania czeka na `/health` (do `--timeout` s), porównuje wersję z `deploy.model_version`,
 wysyła zdania kontrolne z `deploy.smoke_cases` i sprawdza 422 dla pustego tekstu; kod wyjścia 1
@@ -28,7 +28,7 @@ from banking77_intent_ml.config import load_settings
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")  # konsola Windows (cp1250) a polskie znaki
     parser = argparse.ArgumentParser(description="Smoke API BANKING77")
-    parser.add_argument("--url", default="http://localhost:8080")
+    parser.add_argument("--url", default="http://localhost:18080")
     parser.add_argument("--timeout", type=float, default=120.0, help="czekanie na /health [s]")
     parser.add_argument("--record", action="store_true", help="nagraj oczekiwane wyniki")
     args = parser.parse_args()

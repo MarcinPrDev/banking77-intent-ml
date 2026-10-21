@@ -229,16 +229,22 @@ gh release download distilbert-v1 -p distilbert-v1.tar -D dist
 uv run python scripts/model_release.py unpack dist/distilbert-v1.tar   # weryfikacja → models/final/distilbert
 ```
 
-**API lokalnie** — serwuje model z `deploy.artifact_dir` (ADR-0003: DistilBERT); port 8000 bywa
-na Windows zarezerwowany przez system, stąd 8080; dokumentacja endpointów: `http://localhost:8080/docs`.
+**Porty lokalne:** 18080 (API, kontener, UI) i 18081 (klaster kind). Na Windows Hyper-V, WSL2
+i Docker Desktop dynamicznie wykluczają bloki portów TCP, a zakresy zmieniają się po restarcie
+(21.10.2026 m.in. 7969–8068 i 8071–8170, czyli 8000, 8080 i 8081). Sprawdzenie:
+`netsh interface ipv4 show excludedportrange protocol=tcp`. Jeśli port wypada w zakresie, wybierz
+inny — dla kind także `hostPort` w `k8s/kind/cluster.yaml`.
+
+**API lokalnie** — serwuje model z `deploy.artifact_dir` (ADR-0003: DistilBERT); dokumentacja
+endpointów: `http://localhost:18080/docs`.
 
 ```bash
-uv run uvicorn banking77_intent_ml.api.app:create_app --factory --port 8080
+uv run uvicorn banking77_intent_ml.api.app:create_app --factory --port 18080
 ```
 
 **UI demo** (stretch 3, `--extra ui`) — Streamlit nad działającym API: formularz, stan
 `/health`, wynik `/predict`; model zostaje w API. Adres API w panelu bocznym (domyślnie
-`ui.api_url` z configu = `http://localhost:8080`; dla kind `http://localhost:8081`):
+`ui.api_url` z configu = `http://localhost:18080`; dla kind `http://localhost:18081`):
 
 ```bash
 uv run streamlit run src/banking77_intent_ml/ui/app.py
@@ -249,12 +255,12 @@ z configu:
 
 ```bash
 docker build --build-arg MODEL_VERSION=distilbert-v1 -t banking77-intent-api:distilbert-v1 .
-docker run --rm -p 8080:8000 banking77-intent-api:distilbert-v1
-uv run python scripts/smoke_api.py --url http://localhost:8080   # drugi terminal: smoke
+docker run --rm -p 18080:8000 banking77-intent-api:distilbert-v1
+uv run python scripts/smoke_api.py --url http://localhost:18080   # drugi terminal: smoke
 ```
 
 **Klaster kind lokalnie** (W4; kind v0.33.0, kubectl ≥ 1.36, obraz zbudowany wyżej) — te same
-manifesty co w CI (`k8s/`); Service NodePort dostępny z hosta pod `127.0.0.1:8081`
+manifesty co w CI (`k8s/`); Service NodePort dostępny z hosta pod `127.0.0.1:18081`
 (`k8s/kind/cluster.yaml`); tag obrazu = `deploy.model_version`:
 
 ```bash
@@ -263,7 +269,7 @@ kind load docker-image banking77-intent-api:distilbert-v1 --name banking77
 kubectl apply -f k8s/
 kubectl set image deployment/banking77-intent-api api=banking77-intent-api:distilbert-v1
 kubectl rollout status deployment/banking77-intent-api --timeout=180s
-uv run python scripts/smoke_api.py --url http://localhost:8081
+uv run python scripts/smoke_api.py --url http://localhost:18081
 kind delete cluster --name banking77
 ```
 

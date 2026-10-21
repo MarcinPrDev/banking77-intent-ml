@@ -10,7 +10,7 @@ Predyktor i mapa etykiet ładowane raz, na starcie (lifespan). Artefakt z `deplo
 `api.model_version_env` (w obrazie), a bez niej z `deploy.model_version` — jedno źródło wersji.
 
 Uruchomienie lokalne (port 8000 na tej maszynie zarezerwowany przez Windows):
-`uv run uvicorn banking77_intent_ml.api.app:create_app --factory --port 8080`
+`uv run uvicorn banking77_intent_ml.api.app:create_app --factory --port 18080`
 
 Bez `from __future__ import annotations`: FastAPI czyta adnotacje endpointów w czasie działania,
 a model żądania powstaje w `create_app` z limitem długości z configu.

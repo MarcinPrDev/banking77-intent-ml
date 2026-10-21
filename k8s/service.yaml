@@ -1,5 +1,5 @@
 # Service NodePort (decyzja autora 18.10): ruch przez kube-proxy rozkładany na obie repliki.
-# Dostęp z hosta: 127.0.0.1:8081 → węzeł kind :30080 (k8s/kind/cluster.yaml) → pody :8000.
+# Dostęp z hosta: 127.0.0.1:18081 → węzeł kind :30080 (k8s/kind/cluster.yaml) → pody :8000.
 apiVersion: v1
 kind: Service
 metadata:

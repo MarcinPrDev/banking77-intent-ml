@@ -20,7 +20,7 @@ concurrency:
 env:
   IMAGE_NAME: banking77-intent-api
   CLUSTER_NAME: banking77
-  SMOKE_URL: http://localhost:8081  # Service NodePort przez extraPortMappings (k8s/kind/cluster.yaml)
+  SMOKE_URL: http://localhost:18081  # Service NodePort przez extraPortMappings (k8s/kind/cluster.yaml)
 
 jobs:
   deploy:
