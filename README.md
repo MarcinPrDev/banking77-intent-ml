@@ -554,15 +554,33 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     24 GB), model z Release + weryfikacja 4 s, budowa obrazu od zera 98 s (2,21 GB), klaster kind
     44 s, `kind load` 100 s, rollout 13 s, smoke 3 s; tag w Deployment = `deploy.model_version`;
     akcje przypięte pełnym SHA, bez sekretów (tylko `GITHUB_TOKEN`)
-  - [ ] Próba odtworzenia z instrukcji na świeżym klonie (autor). Próba techniczna asystenta
-    18.10 (świeży klon na `P:`, komendy z README po kolei, przy ciepłych cache uv/Docker/kind):
-    klon 1 s, `uv sync` 64 s, `fetch_data` 1 s, testy 239/239 w 52 s, model z Release 8 s,
-    budowa obrazu 98 s, smoke kontenera [OK]; kind: klaster 19 s, `kind load` 63 s, rollout 6 s,
-    smoke [OK]. Usterki: (1) krok „API lokalnie” przed pobraniem modelu — poprawione
-    (kolejność), (2) `--extra gpu` nie instaluje się na macOS — dopisane `--extra cpu`,
-    (3) brak opisu odtworzenia treningu i oceny — dopisana sekcja *Odtworzenie wyników*
-    (A — zamrożone modele z jedną oceną testową, B — ponowne HPO), jeszcze nieprzećwiczona
-    przebiegiem od zera
+  - [x] Próba odtworzenia na świeżych klonach (21–22.10): **łącznie ok. 38 min, 4 potknięcia**
+    (2 niespełnione warunki wstępne, blokada portów, błąd własnego skryptu spoza repo).
+    **Ciepłe cache uv, Dockera, wag HF i obrazu kind**.
+    Czas obejmuje obsługę i diagnozę; nie jest obietnicą czasu pierwszego uruchomienia.
+  - Zaliczono 21.10 (`4504fcc`): testy 264/264, lint, weryfikację Release, budowę obrazu oraz
+    A1–A6 w osobnym klonie. Ocena testowa raz w nowym MLflow; predykcje i score wszystkich
+    trzech modeli identyczne z pierwotnymi runami — porównanie `predictions_test.csv` z obu
+    magazynów MLflow po `row_id` (3 080 wierszy na model, zero różnic klas i score).
+    Zaliczono 22.10: smoke lokalnego API,
+    kontenera i kind na 18080/18081, ze świeżego klonu lokalnego commita `a6d7be5`, z własnym
+    środowiskiem i ponownie pobranym Release. A1–A6 bez powtórki.
+  - Warunki wstępne: Docker Desktop był wyłączony, a aktywne konto `gh` (`MartinPrG`) nie miało
+    dostępu do repo. Uruchomiono Dockera i użyto konta `MarcinPrDev`; zmiana konta zajęła
+    ok. 30 s od odmowy do poprawnego ponowienia komendy. To nie błędy instrukcji.
+  - Co nie zadziałało: wykluczone porty hosta 8080/8081 oraz zbyt krótki timeout we własnym
+    skrypcie pomocniczym spoza repo, sprawdzającym gotowość API (nie w `smoke_api.py`).
+    Wykluczenie TCP 8071–8170 potwierdził `netsh interface ipv4 show excludedportrange protocol=tcp`.
+    Objaw: odmowa dostępu do gniazda, mimo załadowania modelu i poprawnej budowy obrazu.
+    Czas stracony na Docker, porty i skrypt pomocniczy: niezmierzony osobno. Po uruchomieniu
+    Dockera, zmianie konta i portów oraz pominięciu tego skryptu właściwe smoke testy przeszły.
+  - Wcześniejsza próba 18.10 (próba techniczna asystenta): testy, budowa obrazu i smoke
+    kontenera oraz kind przeszły.
+    Poprawiono kolejność pobrania modelu przed API, dopisano `--extra cpu` dla macOS oraz
+    sekcję *Odtworzenie wyników* (A — zamrożone modele, B — ponowne HPO).
+  - Odniesienie dla wdrożenia bez cache: [Deploy kind, run 39138227351](https://github.com/MarcinPrDev/banking77-intent-ml/actions/runs/39138227351)
+    na świeżym runnerze GitHuba — 6 min 28 s, szczegóły wyżej. Ten run nie obejmuje treningów
+    A1–A6. Dalej: kontrola workflow w CI po pushu zmiany portów.
   - [ ] Stretch po rdzeniu, do czw 22.10:
     - [x] seedy DistilBERT na walidacji (18.10): tabela i wniosek w *Wyniki na walidacji*
     - [x] LLM zero-shot (20.10): plan Groq Developer (decyzja autora; limity 250 000 tokenów/min
