@@ -200,6 +200,11 @@ w nowym procesie.
 
 ## Quickstart
 
+**Wymagania przed startem:** Python 3.11 i uv; `gh` zalogowany na konto z dostępem do repo
+(pobranie modelu z Release, dopóki repo jest prywatne); do obrazu i klastra uruchomiony Docker
+(Docker Desktop) oraz kind v0.33.0 i kubectl ≥ 1.36 w `PATH`; do treningu DistilBERT GPU NVIDIA.
+Na Windows sprawdź też porty (niżej: *Porty lokalne*).
+
 ```bash
 # Środowisko lokalne (Python 3.11, uv) — JEDNA komenda z pełną listą extras używanych lokalnie:
 uv sync --extra dev --extra nlp --extra gpu --extra serving
