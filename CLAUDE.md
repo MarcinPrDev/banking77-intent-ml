@@ -39,13 +39,14 @@ Repo i pakiet przemianowane 2.10.2026 (wcześniej `us-accidents-ml` / `us_accide
   checkpointu/konfiguracji na walidacji; recall/F1 per klasa, macierz pomyłek; koszt = czas
   treningu, rozmiar artefaktu, latencja CPU p50/p95 batch=1 (zimny vs rozgrzany).
   **Nie wymyślaj liczb** — każda z MLflow/wykonanego kodu albo „do zmierzenia".
-- Środowisko: **uv**. Lokalnie JEDNA komenda:
-  `uv sync --extra dev --extra nlp --extra gpu --extra serving`;
+- Środowisko: **uv**. Lokalnie JEDNA komenda (od 22.10.2026 z extras stretchów llm i ui):
+  `uv sync --extra dev --extra nlp --extra gpu --extra serving --extra llm --extra ui`;
   goły `uv sync --extra dev` wyłącznie w CI. **`uv sync` jest
   „exact" — extras pominięte w komendzie są usuwane ze środowiska** (torch/transformers znikają);
   po każdym sync na GPU sprawdź `torch.cuda.is_available()`. `uv run` jest bezpieczny (inexact).
   Extras: `nlp` (sentence-transformers), `gpu` (torch cu128 + transformers), `llm` (groq + litellm),
-  `serving` (fastapi, uvicorn, httpx).
+  `serving` (fastapi, uvicorn, httpx), `ui` (streamlit), `cpu` (torch CPU — tylko obraz Docker,
+  rozłączny z `gpu`).
 - MLflow (od 6.10.2026: SQLite): `configure_mlflow(settings)` z `evaluation/tracking.py` na starcie
   każdego skryptu i notebooka — runy w `mlflow.db`, artefakty w `mlruns/`, oba jako bezwzględne
   ścieżki z configu. MLflow 3.14 odrzuca magazyn plikowy, a bez jawnego URI zapisuje do `mlflow.db`
