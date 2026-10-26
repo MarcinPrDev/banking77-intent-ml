@@ -644,6 +644,9 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     - [x] GKE Autopilot (22.10, ręcznie, poza CI): ten sam obraz i manifesty w `europe-central2`,
       smoke `[OK]` przez port-forward, klaster i rejestr usunięte tego samego wieczoru —
       szczegóły i koszt w *Wdrożenie*
+  - Co nie zadziałało: Groq zwracał błędy 429 przy limicie 8 000 tokenów/min — pomogła zmiana
+    planu; przy małym limicie odpowiedzi rozumowanie zużywało go w całości, więc odpowiedź
+    była pusta. W nowym projekcie GCP konto usługi węzłów nie miało żadnych ról.
 - [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
 - [ ] gitleaks + LICENSE → upublicznienie repo (najpóźniej przy wysyłce)
 - [x] **2.10 — zmiana nazwy** repo, pakietu i folderu na `banking77-intent-ml` /
