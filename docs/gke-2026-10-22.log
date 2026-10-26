@@ -1,0 +1,69 @@
+# GKE Autopilot — log wdrożenia z 22.10.2026 (stretch 4; ręcznie, poza CI). Opis: README → Wdrożenie.
+# Niżej surowe wyjście komend; ID projektu GCP zastąpione przez <PROJECT>. Kroki spoza logu
+# (wyjście w sesji, czasy zmierzone):
+#   - obraz: docker build z czystego drzewa fbf1627 (95 s); pliki modelu zgodne z manifestem Release distilbert-v1
+#   - push do Artifact Registry europe-central2: 36 s; indeks sha256:c85a5c62…, obraz amd64 821 775 937 B
+#   - gcloud container clusters create-auto banking77-gke --region europe-central2: 255 s
+#     (21:17:17–21:21:32 UTC), Kubernetes 1.36.4-gke.1495002
+#   - Deployment: kubectl set image --local -f k8s/deployment.yaml api=<obraz z AR>@sha256:c85a5c62… -o yaml | kubectl apply -f -
+#   - teardown: repozytorium AR usunięte ok. 21:26 UTC; gcloud container clusters delete 314 s (21:26:03–21:31:17 UTC)
+== kontekst: gke_<PROJECT>_europe-central2_banking77-gke
+No resources found
+== apply 21:21:58 UTC
+service/banking77-intent-api created
+deployment.apps/banking77-intent-api created
+Waiting for deployment "banking77-intent-api" rollout to finish: 0 out of 2 new replicas have been updated...
+Waiting for deployment "banking77-intent-api" rollout to finish: 0 of 2 updated replicas are available...
+Waiting for deployment "banking77-intent-api" rollout to finish: 1 of 2 updated replicas are available...
+deployment "banking77-intent-api" successfully rolled out
+rollout: 193 s, exit 0
+== pody
+NAME                                    READY   STATUS    RESTARTS   AGE     IP             NODE                                           NOMINATED NODE   READINESS GATES
+banking77-intent-api-5697d9b896-72ltr   1/1     Running   0          3m24s   10.54.128.11   gk3-banking77-gke-nap-lgxp5rc5-2a417f18-2kcx   <none>           <none>
+banking77-intent-api-5697d9b896-9bd84   1/1     Running   0          3m24s   10.54.128.9    gk3-banking77-gke-nap-lgxp5rc5-2a417f18-2kcx   <none>           <none>
+== obraz uruchomiony (imageID)
+banking77-intent-api-5697d9b896-72ltr  europe-central2-docker.pkg.dev/<PROJECT>/banking77/banking77-intent-api@sha256:c85a5c625194a108acfa93c3b253736894aadeef7f05e6e1e8e3f33b69338f10  restarts=0
+banking77-intent-api-5697d9b896-9bd84  europe-central2-docker.pkg.dev/<PROJECT>/banking77/banking77-intent-api@sha256:c85a5c625194a108acfa93c3b253736894aadeef7f05e6e1e8e3f33b69338f10  restarts=0
+== zasoby po Autopilocie (pod 1)
+{"limits":{"ephemeral-storage":"1Gi","memory":"1Gi"},"requests":{"cpu":"500m","ephemeral-storage":"1Gi","memory":"512Mi"}}
+
+
+== węzły
+NAME                                           TYPE            ZONE                CREATED
+gk3-banking77-gke-nap-lgxp5rc5-2a417f18-2kcx   ek-standard-8   europe-central2-c   2026-10-22T21:23:48Z
+== zdarzenia (pull/scale-up/sondy)
+2026-10-22T21:23:09Z   TriggeredScaleUp                 banking77-intent-api-5697d9b896-9bd84          Pod triggered scale-up: [{https://www.googleapis.com/compute/v1/projects/<PROJECT>/zones/europe-central2-c
+2026-10-22T21:23:09Z   TriggeredScaleUp                 banking77-intent-api-5697d9b896-72ltr          Pod triggered scale-up: [{https://www.googleapis.com/compute/v1/projects/<PROJECT>/zones/europe-central2-c
+2026-10-22T21:23:46Z   FailedScheduling                 banking77-intent-api-5697d9b896-9bd84          no nodes available to schedule pods
+2026-10-22T21:23:46Z   FailedScheduling                 banking77-intent-api-5697d9b896-72ltr          no nodes available to schedule pods
+2026-10-22T21:23:48Z   KubeletStart                     gk3-banking77-gke-nap-lgxp5rc5-2a417f18-2kcx   Started kubelet.service.
+2026-10-22T21:23:57Z   Scheduled                        banking77-intent-api-5697d9b896-9bd84          Successfully assigned default/banking77-intent-api-5697d9b896-9bd84 to gk3-banking77-gke-nap-lgxp5rc5-2a417f18-2kcx
+2026-10-22T21:23:57Z   Scheduled                        banking77-intent-api-5697d9b896-72ltr          Successfully assigned default/banking77-intent-api-5697d9b896-72ltr to gk3-banking77-gke-nap-lgxp5rc5-2a417f18-2kcx
+2026-10-22T21:24:57Z   Started                          banking77-intent-api-5697d9b896-72ltr          Container started
+2026-10-22T21:24:57Z   Pulled                           banking77-intent-api-5697d9b896-72ltr          Successfully pulled image "europe-central2-docker.pkg.dev/<PROJECT>/banking77/banking77-intent-api@sha256:
+2026-10-22T21:24:57Z   Pulled                           banking77-intent-api-5697d9b896-9bd84          Successfully pulled image "europe-central2-docker.pkg.dev/<PROJECT>/banking77/banking77-intent-api@sha256:
+2026-10-22T21:24:57Z   Started                          banking77-intent-api-5697d9b896-9bd84          Container started
+2026-10-22T21:25:09Z   Unhealthy                        banking77-intent-api-5697d9b896-9bd84          Startup probe failed: Get "http://10.54.128.9:8000/health": dial tcp 10.54.128.9:8000: connect: connection refused
+2026-10-22T21:25:09Z   Unhealthy                        banking77-intent-api-5697d9b896-72ltr          Startup probe failed: Get "http://10.54.128.11:8000/health": dial tcp 10.54.128.11:8000: connect: connection refused
+== port-forward: Forwarding from 127.0.0.1:18082 -> 8000 | Forwarding from [::1]:18082 -> 8000
+== smoke 21:25:37 UTC
+[OK] http://localhost:18082: /health, 14 zdań kontrolnych i 422 — wersja distilbert-v1
+smoke exit: 0
+== pamięć podów
+NAME                                    CPU(cores)   MEMORY(bytes)   
+banking77-intent-api-5697d9b896-72ltr   570m         369Mi           
+banking77-intent-api-5697d9b896-9bd84   602m         369Mi           
+== teardown — kontrola 21:31:28 UTC
+container clusters list      brak
+compute instances list       brak
+compute disks list           brak
+compute forwarding-rules list brak
+compute addresses list       brak
+compute target-pools list    brak
+artifacts repositories       
+
+# Dopisane po fakcie (22.10): pusta wartość w wierszu „artifacts repositories” to błąd filtra w skrypcie
+# kontrolnym (połknięty komunikat z stderr). Ponowne sprawdzenie kilka minut później: [] w europe-central2
+# i brak repozytoriów we wszystkich lokalizacjach. Pełna kontrola 21:53 UTC — GKE, Compute Engine
+# (VM, dyski, snapshoty, obrazy, adresy, load balancery, NEG, routery/NAT, VPN, rezerwacje, zobowiązania),
+# Artifact Registry, Cloud Storage, Filestore, Cloud DNS, Pub/Sub, Vertex AI (4 regiony), BigQuery: brak zasobów.

@@ -456,7 +456,8 @@ jeśli na starcie W4 nie ma obrazu, wdrażamy baseline TF-IDF, nie czekamy na le
 - **GKE (stretch #4, wykonane 22.10 ręcznie, poza CI):** ten sam obraz i te same manifesty na
   GKE Autopilot w `europe-central2` (Warszawa, Kubernetes 1.36.4-gke). Klaster żył ok. 14 min;
   `teardown` tego samego wieczoru — klaster i repozytorium Artifact Registry usunięte, w projekcie
-  brak VM, dysków, adresów i reguł przekierowania. Przebieg (komendy w *Quickstart*):
+  brak VM, dysków, adresów i reguł przekierowania. Przebieg (komendy w *Quickstart*; log z ID
+  projektu zastąpionym przez `<PROJECT>`: [`docs/gke-2026-10-22.log`](docs/gke-2026-10-22.log)):
   - obraz z czystego drzewa `fbf1627` (pliki modelu zgodne z manifestem Release); push do
     Artifact Registry 36 s — obraz amd64 821 775 937 B, wdrożony po digeście indeksu
     `sha256:c85a5c62…`;
@@ -628,7 +629,9 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     sekcję *Odtworzenie wyników* (A — zamrożone modele, B — ponowne HPO).
   - Odniesienie dla wdrożenia bez cache: [Deploy kind, run 39138227351](https://github.com/MarcinPrDev/banking77-intent-ml/actions/runs/39138227351)
     na świeżym runnerze GitHuba — 6 min 28 s, szczegóły wyżej. Ten run nie obejmuje treningów
-    A1–A6. Dalej: kontrola workflow w CI po pushu zmiany portów.
+    A1–A6. Po zmianie portu kind na 18081 workflow zielony na `7a97783`
+    ([run 39849732584](https://github.com/MarcinPrDev/banking77-intent-ml/actions/runs/39849732584))
+    i `eaed6f7` ([run 39858858539](https://github.com/MarcinPrDev/banking77-intent-ml/actions/runs/39858858539)).
   - [x] Stretch po rdzeniu, do czw 22.10 — wszystkie cztery:
     - [x] seedy DistilBERT na walidacji (18.10): tabela i wniosek w *Wyniki na walidacji*
     - [x] LLM zero-shot (20.10): plan Groq Developer (decyzja autora; limity 250 000 tokenów/min
