@@ -582,8 +582,8 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
     gotowością API. Pomiary kontenera z 15.10 dotyczą wersji sprzed tej zmiany.
   - Co nie zadziałało: notebook wymagał poprawy typów komórek i uzupełnienia obliczeń dla
     podanych liczb. Obraz CPU pozostał duży (3,18 GB), bo zachowano zależności treningu i analizy.
-- [ ] W4 (start nd 18.10, wieczory 19–22.10; pt–nd 23–25.10 bez pracy — decyzja autora 18.10):
-  kind + workflow CI + test HTTP + odtworzenie z instrukcji
+- [x] **W4** (start nd 18.10, wieczory 19–22.10; pt–nd 23–25.10 bez pracy — decyzja autora 18.10;
+  zamknięty 26.10): kind + workflow CI + test HTTP + odtworzenie z instrukcji
   - [x] Runner CI przypięty do `ubuntu-24.04` (18.10; `ubuntu-latest` przechodzi na 26.04 od 19.10)
   - [x] Obraz przebudowany z rozgrzewką DistilBERT (18.10): build 94 s z cache zależności;
     gotowość 3,96 s od `docker run`, pierwsze `/predict` 15,5 ms (kolejne 13,4–14,6 ms),
@@ -659,6 +659,8 @@ Docker, Kubernetes, CI/CD; LLM jako stretch.
   aktualizacja na koniec każdego slotu)
   - W2 (12–14.10): **14 h pracy przy budżecie 14 h — 0 h nadwyżki**; rezerwa nadal zużyta 8 z 8 h.
   - W3 (14–18.10): **14 h pracy przy budżecie 14 h — 0 h nadwyżki**; rezerwa nadal zużyta 8 z 8 h.
+  - W4 (18–22.10): **ok. 22 h pracy przy budżecie 14 h — ok. 8 h nadwyżki** (świadome nadgodziny;
+    rezerwa wyczerpana po W1). Łącznie W1–W4 ok. 70 h wobec 54 h budżetu slotów.
 
 **Wyniki na walidacji** (W1–W2; zamrożona walidacja z manifestu — do wyboru konfiguracji,
 nie do porównań z literaturą; wszystkie liczby z MLflow):
