@@ -837,6 +837,18 @@ na pobocznym fragmencie zdania.
 DistilBERT popełnia najmniej błędów. Wysoki score nie gwarantuje poprawności, a score kNN
 przy k równym 1 nie informuje o pewności odpowiedzi.
 
+## Odpowiedź na pytanie badawcze
+
+*TODO-Marcin: napisz własnymi słowami.*
+
+## Ograniczenia i granice weryfikacji
+
+*TODO-Marcin: napisz własnymi słowami.*
+
+## Co nie zadziałało i co zrobiłbym inaczej
+
+*TODO-Marcin: napisz własnymi słowami.*
+
 ## Dalsze prace
 
 Po oddaniu projektu (decyzja C z 13.10):
