@@ -907,7 +907,7 @@ Bez dalszego strojenia po teście i bez dowodu trwałej przewagi nad kNN.
 
 ## Co nie zadziałało i co zrobiłbym inaczej
 
-- Plan czasu był zbyt ciasny. Rezerwa wyczerpana już po W1, W4 wymagał nadgodzin.
+- Plan czasu był zbyt ciasny. Rezerwa wyczerpała się już po W1, a W4 wymagał nadgodzin.
   Następnym razem wcześniej ograniczyłbym stretch i zostawił więcej czasu na odtworzenie
   projektu oraz redakcję raportu.
 - Model do wdrożenia wybrałem dopiero po wynikach testu. Następnym razem decyzja na podstawie
@@ -920,8 +920,9 @@ Bez dalszego strojenia po teście i bez dowodu trwałej przewagi nad kNN.
   limity Groq i brak ról konta w GCP. Wcześniej sprawdziłbym wymagania, uprawnienia i limity
   krótkim przebiegiem. Dla LLM także to, czy budżet tokenów wystarcza na niepustą odpowiedź.
 - Obraz CPU zawierał zależności treningu i analizy. Następnym razem wcześniej oddzieliłbym
-  środowisko serwowania, a próbę z README na świeżym klonie zrobiłbym zaraz po pierwszym
-  działającym wdrożeniu. Pozwoliłoby to wcześniej wykryć brakujące kroki instrukcji.
+  środowisko serwowania, a własną próbę z README na świeżym klonie zrobiłbym zaraz
+  po pierwszym działającym wdrożeniu, nie dopiero 21–22.10. Pozwoliłoby to wcześniej
+  wykryć brakujące kroki instrukcji.
 
 ## Dalsze prace
 
@@ -936,6 +937,14 @@ Po oddaniu projektu (decyzja C z 13.10):
 Dodatkowo (27.10): przedziały ufności i sparowane testy istotności różnic na zapisanych
 predykcjach. Bez ponownego treningu i strojenia pod test; taka analiza nie usuwa ograniczenia
 wynikającego z wyboru modelu po obejrzeniu testu.
+
+- OOD: nowe zgłoszenia z intencjami spoza 77 klas, obok przykładów znanych intencji.
+  Sprawdzenie odrzucania nieznanych spraw i przekazywania ich człowiekowi,
+  z uwzględnieniem błędnego odrzucania znanych intencji. Dobór reguły i ocena na osobnych danych.
+- Kalibracja score DistilBERT, np. temperature scaling, na nowych oznaczonych danych.
+  Osobne części do kalibracji, wyboru progu przekazania człowiekowi i końcowej oceny.
+  Ocena wykresem kalibracji i ECE; bez użycia obecnego testu ani dawnej walidacji z refitu.
+  Sama kalibracja nie zastępuje sprawdzenia OOD.
 
 ## Historia decyzji
 
