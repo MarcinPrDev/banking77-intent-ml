@@ -865,7 +865,45 @@ Bez dalszego strojenia po teście i bez dowodu trwałej przewagi nad kNN.
 
 ## Ograniczenia i granice weryfikacji
 
-*TODO-Marcin: napisz własnymi słowami.*
+- Pochodzenie i anonimizacja tekstów nieudokumentowane. Skan 13 083 tekstów: zero trafień
+  prostych wzorców, bez dowodu braku PII. Szczegóły w sekcji [Dane](#dane).
+- Wskazania Ying & Thomas dotyczą potencjalnych problemów etykiet, nie potwierdzonych błędów.
+  Etykiety pozostawione bez zmian.
+- Test 3 080 zdań jest zrównoważony: 40 przykładów na klasę. Jedna pomyłka to 2,5 p.p.
+  recallu klasy. Wynik nie odwzorowuje częstości rzeczywistych zgłoszeń.
+  Brak czasu i identyfikatorów rozmów ogranicza kontrolę podziału danych.
+  Podzbiór 3 055 służy kontroli wpływu pokrycia z train, nie porównaniu z publikacjami.
+- DistilBERT oceniony na teście 3 080 zdań dla jednego seeda treningu. TF-IDF+LR i kNN
+  przy zamrożonej konfiguracji są deterministyczne. Seed Optuny wpływał na dobór
+  konfiguracji TF-IDF+LR; siatka kNN była pełna. Badanie sześciu seedów DistilBERT
+  dotyczyło tylko walidacji (1 499 zdań), bez różnych podziałów danych.
+  Nie potwierdza stabilności rankingu na teście. O wyborze po teście — w sekcji
+  [Odpowiedź na pytanie badawcze](#odpowiedź-na-pytanie-badawcze).
+- Brak przedziałów ufności i testów istotności różnic. DistilBERT ma o 30 błędów mniej
+  niż kNN na 3 080 zdaniach, a na podzbiorze 385 — jedno trafienie więcej.
+  Nie rozstrzygamy, czy różnice wykraczają poza losowość próby. Analiza niepewności
+  dopiero po oddaniu projektu, bez zmiany konfiguracji pod obecny test.
+- Ograniczone i różne budżety strojenia. LR DistilBERT 6e-5 na brzegu siatki;
+  krzywe walidacyjne dla niższych LR jeszcze rosły. Porównanie wybranych konfiguracji,
+  nie pełnych możliwości modeli. Porównanie z literaturą tylko na teście Full
+  (3 080 zdań, refit na 10 003), z zastrzeżeniem różnic LR, epok i seeda.
+- System obsługuje tylko język angielski. Brak walidacji intencji spoza 77 klas (OOD)
+  i rzeczywistych zgłoszeń firmy.
+  Model zawsze wybiera znaną klasę. Score nie jest skalibrowaną pewnością;
+  przy k=1 w kNN zawsze wynosi 1,0. Dawna walidacja weszła do refitu,
+  więc kalibracja i próg przekazania sprawy człowiekowi wymagają nowych danych.
+- LLM oceniony na 385 wiadomościach, tych samych co modele lokalne w tabeli porównawczej.
+  Ekspozycja LLM na BANKING77 nieustalona. Wynik nie dowodzi generalizacji;
+  latencja obejmuje sieć i API, więc nie jest wprost porównywalna z lokalną predykcją CPU.
+- Koszt zależy od sprzętu i warunków pomiaru. Pomiary CPU bez narzutu HTTP i obciążenia
+  równoległymi żądaniami; zimny start z plikami w cache systemu.
+  Czasy refitu nie obejmują strojenia, a rozmiar artefaktu nie oznacza rozmiaru obrazu ani RAM.
+  Zielone smoke testy potwierdzają działanie wdrożenia, nie jakość na nowych danych
+  ani gotowość do pracy produkcyjnej.
+- Zgodność predykcji obrazu CPU z ocenionym artefaktem sprawdzono na 50 zdaniach dawnej
+  walidacji: 50 zgodnych id, różnica score najwyżej 3e-07, oraz na 14 zdaniach smoke.
+  Bez ponownej oceny obrazu na teście. Odtworzenie wyników na świeżym klonie wykonano
+  na tej samej maszynie; nie potwierdza zgodności na innym sprzęcie.
 
 ## Co nie zadziałało i co zrobiłbym inaczej
 
@@ -880,6 +918,10 @@ Po oddaniu projektu (decyzja C z 13.10):
   znormalizowane duplikaty zawsze razem.
 - Kilka seedów, żeby sprawdzić stabilność wyników.
 - Front jakość–koszt: warianty, których nie da się poprawić w jednym kryterium bez pogorszenia drugiego.
+
+Dodatkowo (27.10): przedziały ufności i sparowane testy istotności różnic na zapisanych
+predykcjach. Bez ponownego treningu i strojenia pod test; taka analiza nie usuwa ograniczenia
+wynikającego z wyboru modelu po obejrzeniu testu.
 
 ## Historia decyzji
 
