@@ -839,7 +839,29 @@ przy k równym 1 nie informuje o pewności odpowiedzi.
 
 ## Odpowiedź na pytanie badawcze
 
-*TODO-Marcin: napisz własnymi słowami.*
+Częściowo: w tym projekcie poprawa jakości względem TF-IDF+LR uzasadnia dla mnie większy
+koszt DistilBERT, ale wobec MiniLM+kNN wyniki nie dają jednoznacznej odpowiedzi.
+Na teście 3 080 zdań: accuracy 93,02% wobec 92,05% MiniLM+kNN i 90,81% TF-IDF+LR.
+To odpowiednio 30 i 68 błędów mniej.
+(Macro-F1 na tym samym teście: odpowiednio 93,05%, 92,03% i 90,83%.)
+Zgodnie z ADR-0003 pierwszeństwo ma jakość; progu opłacalności nie ustalono.
+
+Cena wyboru: większy artefakt i wyższe p95 predykcji na CPU przy jednym wątku.
+Dla DistilBERT, MiniLM+kNN i TF-IDF+LR odpowiednio: 268,8 / 107,0 / 5,2 MB
+oraz p95 31,42 / 16,83 / 0,43 ms.
+Pomiar po rozgrzaniu, batch=1, 200 zdań z dawnej walidacji, trzy przebiegi; bez narzutu HTTP.
+Zimny start przy jednym wątku krótszy niż dla kNN: 3,30 s wobec 4,69 s,
+ale dłuższy niż dla TF-IDF+LR (0,85 s); mediana z 10 nowych procesów.
+Sam refit, bez strojenia, na 10 003 zdaniach: 25,5 s dla DistilBERT i 3,0 s dla MiniLM+kNN na GPU,
+4,9 s dla TF-IDF+LR na CPU. Różny sprzęt, więc bez prostego przeliczenia czasu na koszt.
+
+To kompromis projektowy, nie dowód opłacalności w banku.
+Argument jakościowy mocniejszy wobec TF-IDF+LR: DistilBERT wyżej na walidacji (1 499 zdań)
+i teście (3 080 zdań). Wobec kNN wynik niejednoznaczny: na walidacji (1 499 zdań)
+wygrywał kNN, na teście (3 080 zdań) DistilBERT.
+DistilBERT wybrano dopiero po obejrzeniu wyników testu;
+93,02% na 3 080 zdaniach nie stanowi niezależnego potwierdzenia tego wyboru.
+Bez dalszego strojenia po teście i bez dowodu trwałej przewagi nad kNN.
 
 ## Ograniczenia i granice weryfikacji
 
