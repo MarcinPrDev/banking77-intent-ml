@@ -907,7 +907,21 @@ Bez dalszego strojenia po teście i bez dowodu trwałej przewagi nad kNN.
 
 ## Co nie zadziałało i co zrobiłbym inaczej
 
-*TODO-Marcin: napisz własnymi słowami.*
+- Plan czasu był zbyt ciasny. Rezerwa wyczerpana już po W1, W4 wymagał nadgodzin.
+  Następnym razem wcześniej ograniczyłbym stretch i zostawił więcej czasu na odtworzenie
+  projektu oraz redakcję raportu.
+- Model do wdrożenia wybrałem dopiero po wynikach testu. Następnym razem decyzja na podstawie
+  walidacji i kosztów, przed otwarciem testu. Dane do kalibracji wydzielone przed refitem;
+  badanie kilku seedów i niepewności różnic zaplanowane od początku.
+- Analiza błędów w notebooku początkowo miała tekst w komórkach kodu i liczby bez obliczeń
+  pokazujących ich źródło. Następnym razem każda tabela i wniosek od razu obok kodu,
+  który je uzasadnia, oraz uruchomienie całego notebooka przed review.
+- Problemy środowiska i usług zabierały czas: zależności, zmiany API bibliotek, porty Windows,
+  limity Groq i brak ról konta w GCP. Wcześniej sprawdziłbym wymagania, uprawnienia i limity
+  krótkim przebiegiem. Dla LLM także to, czy budżet tokenów wystarcza na niepustą odpowiedź.
+- Obraz CPU zawierał zależności treningu i analizy. Następnym razem wcześniej oddzieliłbym
+  środowisko serwowania, a próbę z README na świeżym klonie zrobiłbym zaraz po pierwszym
+  działającym wdrożeniu. Pozwoliłoby to wcześniej wykryć brakujące kroki instrukcji.
 
 ## Dalsze prace
 
