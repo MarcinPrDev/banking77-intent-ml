@@ -35,7 +35,9 @@ i działająca usługa — także wtedy, gdy najdroższy model nie wygra.
 ¹ Normalizacja audytowa: Unicode NFKC → casefold → tokeny `\w+` połączone spacją. **25 tekstów
 testowych ma odpowiednik w train** po tej normalizacji (etykiety zgodne); bez nich zostaje **3 055**.
 Liczby z własnego audytu danych (30.09.2026, normalizacja jak w `split.dedup_normalization`
-w configu); skrypt audytu trafi do repo w W1 (`notebooks/` lub `scripts/`), notatka źródłowa poza repo.
+w configu). Kod w repo: duplikaty i konflikt w train — notebook 01 §5 i `data/splits.py`; pokrycie
+testu i podzbiory 3 055 / 385 — `data/audit.py` (CLI `scripts/make_test_subsets.py`); notatka
+źródłowa poza repo.
 
 - **Źródło:** repozytorium `PolyAI-LDN/task-specific-datasets`, przypięty commit
   `57ec275d8078af65b7731c2a98be812d844a6d6b`, pliki `banking_data/train.csv`
@@ -169,7 +171,7 @@ Nazwy klas są robocze — ostateczne nazewnictwo i podział na moduły to decyz
 
 **MLflow** (lokalnie, poza gitem: baza `mlflow.db` z runami + artefakty w `mlruns/`; podgląd:
 `uv run mlflow ui --backend-store-uri sqlite:///mlflow.db`) = tracking wszystkich runów: parametry, metryki na walidacji,
-czas treningu, rozmiar artefaktu. **Wybrany model (ADR-0003, 15.10): DistilBERT** — oceniony
+czas treningu, rozmiar artefaktu. **Wybrany model ([ADR-0003](docs/adr/0003-wybor-modelu-do-wdrozenia.md), 15.10): DistilBERT** — oceniony
 artefakt z refitu w `models/final/distilbert`, bez kopiowania. Sekcja `deploy` w configu
 (`model_version: distilbert-v1`, `artifact_dir`) — jedno źródło dla build-arg obrazu, tagu,
 manifestu k8s i odpowiedzi `/health` (`MODEL_VERSION`; bez tej zmiennej API zwraca
@@ -185,8 +187,8 @@ pobranych przez `fetch_data.py --only train` (bez `test.csv`; działa tylko dla 
 splitu niesie tylko hash, więc w CI trzeba odtworzyć podział `make_splits` i porównać hash
 z manifestem — albo refitować na całych 10 003 bez podziału) — odrzucone, bo tworzy nowy
 artefakt; (c) GCS (tylko jeśli GCP wejdzie jako stretch) — odrzucone. W4 implementuje (a).
-Wybrany DistilBERT wymaga torcha CPU w obrazie — rozmiar 3,18 GB (W3); czas budowy od zera
-— do zmierzenia w CI.
+Wybrany DistilBERT wymaga torcha CPU w obrazie — rozmiar 3,18 GB (W3); budowa od zera w CI
+98 s (run `deploy-kind` na PR #1, 18.10 — *Status*, W4).
 
 **Release `distilbert-v1` (18.10):**
 [github.com/MarcinPrDev/banking77-intent-ml/releases/tag/distilbert-v1](https://github.com/MarcinPrDev/banking77-intent-ml/releases/tag/distilbert-v1)
@@ -823,18 +825,19 @@ klas: `virtual_card_not_working` ma najniższe F1 (50,0%) i recall (33,3%) przy 
 model wskazał tę klasę dwukrotnie, oba razy trafnie, ale pozostałe cztery przykłady przypisał
 innym klasom; przy sześciu przykładach jedna pomyłka zmienia recall o 16,7 punktu procentowego.
 
-**Tabela końcowa** (W3, test dotknięty raz; koszt finalnych artefaktów po reficie;
-wszystkie liczby z MLflow / wykonanego kodu):
+**Tabela końcowa** (W3, test dotknięty raz; koszt finalnych artefaktów po reficie; N-train
+10 003 dla wszystkich ścieżek; wszystkie liczby z MLflow / wykonanego kodu):
 
-| Model | Acc (test 3 080) | Acc (3 055) | Macro-F1 (3 080) | Czas treningu (10 003) | Artefakt | Latencja CPU p50 / p95 | Zimny start (1 w. / 8 w.) |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| Dummy | 1,30% (arytmetyka) | — | — | 0 | — | — | — |
-| TF-IDF + LR | 90,81% | 90,77% | 90,83% | 4,9 s (CPU) | 5,2 MB | 0,28 / 0,43 ms (1 w.) · 0,27 / 0,42 ms (8 w.) | 0,85 s / 0,85 s |
-| MiniLM + kNN | 92,05% | 92,01% | 92,03% | 3,0 s (GPU) | 107,0 MB | 12,16 / 16,83 ms (1 w.) · 9,26 / 10,89 ms (8 w.) | 4,69 s / 4,69 s |
-| DistilBERT | 93,02% | 92,96% | 93,05% | 25,5 s (GPU) | 268,8 MB | 17,48 / 31,42 ms (1 w.) · 8,22 / 11,45 ms (8 w.) | 3,30 s / 3,19 s |
+| Model | Acc (test 3 080) | Acc (3 055) | Macro-F1 (3 080) | Macro-F1 (3 055) | Czas treningu (10 003) | Artefakt | Latencja CPU p50 / p95 | Zimny start (1 w. / 8 w.) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Dummy | 1,30% (arytmetyka) | — | — | — | 0 | — | — | — |
+| TF-IDF + LR | 90,81% | 90,77% | 90,83% | 90,78% | 4,9 s (CPU) | 5,2 MB | 0,28 / 0,43 ms (1 w.) · 0,27 / 0,42 ms (8 w.) | 0,85 s / 0,85 s |
+| MiniLM + kNN | 92,05% | 92,01% | 92,03% | 91,99% | 3,0 s (GPU) | 107,0 MB | 12,16 / 16,83 ms (1 w.) · 9,26 / 10,89 ms (8 w.) | 4,69 s / 4,69 s |
+| DistilBERT | 93,02% | 92,96% | 93,05% | 93,00% | 25,5 s (GPU) | 268,8 MB | 17,48 / 31,42 ms (1 w.) · 8,22 / 11,45 ms (8 w.) | 3,30 s / 3,19 s |
 
 Źródła (MLflow): ocena końcowa — runy `0c08edb4`, `04ec980a`, `fb0d0bde` (`split=test`,
-commit `6cae45d`); refit na 10 003 — runy `f7e23471`, `4509d9d4`, `5b883a97` (`final_refit`,
+commit `6cae45d`; kolumnę macro-F1 (3 055) dopisano 28.10 z metryki `clean_macro_f1` tych
+samych runów, bez ponownej oceny); refit na 10 003 — runy `f7e23471`, `4509d9d4`, `5b883a97` (`final_refit`,
 commit `d809c57` = tag `experiments-frozen`); koszt — badanie `cpu_cost_final`, po dwa runy
 na ścieżkę (1 i 8 wątków: `4e0fe1ce`/`9b7c4505`, `a8276f36`/`bea6c48a`, `56a7fbb4`/`0ec07580`),
 metodyka jak w tabeli *Koszt na CPU*. Runy zapisały hashe commitów sprzed przepisania historii
@@ -1012,7 +1015,7 @@ wynikającego z wyboru modelu po obejrzeniu testu.
 
 ## Historia decyzji
 
-- **ADR-0001 — zmiana tematu z US Accidents na BANKING77** (`docs/adr/0001-zmiana-tematu-na-banking77.md`).
+- **[ADR-0001](docs/adr/0001-zmiana-tematu-na-banking77.md) — zmiana tematu z US Accidents na BANKING77**.
   Etykieta `Severity` w US Accidents okazała się mieszanką skal różnych dostawców API z dryfem
   schematu (udział klasy 3 w Source1 spada z ~18% do 0% od 2021; zgodność między źródłami
   kappa 0,01–0,05), bez uczciwego publicznego punktu odniesienia dla kontraktu „w chwili
@@ -1020,6 +1023,12 @@ wynikającego z wyboru modelu po obejrzeniu testu.
   zbiór z ugruntowanym benchmarkiem i gotowym testem (kryterium: bezpieczeństwo terminu).
 - Wnioski z audytu US Accidents (drabina leakage, kappa źródeł) i temat NHTSA Recalls →
   **po oddaniu projektu**, nie jako stretch.
+- **[ADR-0002](docs/adr/0002-protokol-ewaluacji.md) — protokół ewaluacji** (zaakceptowany 14.10):
+  grupowany split, grupa konfliktowa, mapa etykiet, podzbiory testowe 3 055 / 385 i refit
+  na 10 003 przed testem.
+- **[ADR-0003](docs/adr/0003-wybor-modelu-do-wdrozenia.md) — wybór modelu do wdrożenia i źródło
+  artefaktu w CI** (zaakceptowany 15.10): DistilBERT, model w CI z GitHub Release (opcja a);
+  wybór po ocenie na teście, bez liczbowego progu — zob. *Odpowiedź na pytanie badawcze*.
 
 ## Tooling — współpraca z AI
 
