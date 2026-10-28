@@ -54,6 +54,12 @@ w configu); skrypt audytu trafi do repo w W1 (`notebooks/` lub `scripts/`), nota
 - **Ograniczenia zbioru:** test jest sztucznie zrównoważony (wynik nie odwzorowuje częstości
   rzeczywistych zgłoszeń); przy 40 przykładach na klasę jedna pomyłka = 2,5 p.p. recallu klasy;
   brak czasu i identyfikatorów rozmów (nie da się zweryfikować podziału chronologicznego).
+- **EDA — tylko train (10 003 wiadomości):** mediana / P95 / maksimum długości:
+  znaki 47 / 151,9 / 433, słowa 10 / 29 / 79, tokeny DistilBERT z tokenami specjalnymi
+  13 / 37 / 98 ([notebook, §4, §6 i §9](notebooks/01_eda.ipynb)).
+  `max_len=128` nie obcina żadnej wiadomości train; nie daje to gwarancji dla przyszłych zgłoszeń.
+  Najkrótsze teksty mają mało kontekstu, wśród najdłuższych są opisy weryfikacji w formie
+  odpowiedzi, a podobne intencje bywają niejednoznaczne i wymagają uwagi na szczegóły.
 
 ## Protokół ewaluacji (wspólny dla wszystkich modeli)
 
