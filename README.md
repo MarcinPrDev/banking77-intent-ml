@@ -675,6 +675,9 @@ i miejsca, w których projekt je realizuje:
     była pusta. W nowym projekcie GCP konto usługi węzłów nie miało żadnych ról.
 - [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
 - [ ] gitleaks + LICENSE → upublicznienie repo (najpóźniej przy wysyłce)
+  - [x] gitleaks v8.30.1 (28.10): `gitleaks git --log-opts="--all" --redact` — 123 commity
+    we wszystkich refach (gałęzie, tagi), brak wycieków
+  - [x] `LICENSE` (MIT, 28.10)
 - [x] **2.10 — zmiana nazwy** repo, pakietu i folderu na `banking77-intent-ml` /
       `banking77_intent_ml` (`docs/RENAME.md`)
 - [x] **2.10 — porządki po poprzednim temacie**: notebook EDA, `csv_to_parquet.py`, `sanity_w1.py`
@@ -994,7 +997,7 @@ autor; w ADR-0001 sekcje *Kontekst* i *Rozważane opcje* zestawił asystent z no
 
 ## Licencja
 
-**Kod:** MIT (plik `LICENSE` przed upublicznieniem repo).
+**Kod:** MIT — plik [`LICENSE`](LICENSE).
 **Dane:** BANKING77 — Casanueva, Temčinas, Gerz, Henderson, Vulić (2020), *Efficient Intent
 Detection with Dual Sentence Encoders*, PolyAI; repozytorium `PolyAI-LDN/task-specific-datasets`,
 licencja **CC BY 4.0**. Dane nie są przechowywane w repo — pobiera je `scripts/fetch_data.py`
