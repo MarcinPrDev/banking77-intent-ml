@@ -482,8 +482,9 @@ jeśli na starcie W4 nie ma obrazu, wdrażamy baseline TF-IDF, nie czekamy na le
   Koszt wg cennika GKE dla Warszawy (22.10): pody 0,0573 USD za vCPU·h i 0,0063421 USD za GiB·h
   (Autopilot liczy zasoby podów, nie węzła) → nasze 2 × 0,5 vCPU / 0,5 GiB ≈ 0,064 USD/h; opłatę
   za klaster 0,10 USD/h pokrywa kredyt GKE (74,40 USD/mies. na konto rozliczeniowe), **nie
-  compute**; Artifact Registry: 0,5 GiB miesięcznie bez opłat. Rzeczywista kwota — do odczytu
-  z rozliczeń GCP (dane spływają z opóźnieniem).
+  compute**; Artifact Registry: 0,5 GiB miesięcznie bez opłat. Rzeczywista kwota wg raportu
+  rozliczeń GCP za październik 2026 (odczyt 28.10): koszt 0,10 zł, w całości pokryty środkami
+  („inne oszczędności” −0,10 zł) — do zapłaty 0,00 zł.
 - **Sekrety:** `GROQ_API_KEY` tylko w `.env` (poza gitem) / GitHub Secrets; w kodzie i configu
   żadnych kluczy.
 
@@ -505,9 +506,9 @@ i miejsca, w których projekt je realizuje:
 
 | Wymaganie | Gdzie w repo |
 |---|---|
-| 1a. Analiza rozkładów cech | [Dane](#dane) — liczność klas w train i teście; długości tekstów: [`notebooks/01_eda.ipynb`](notebooks/01_eda.ipynb) §4 |
+| 1a. Analiza rozkładów cech | [Dane](#dane) — liczność klas w train i teście, długości tekstów (znaki, słowa, tokeny); [`notebooks/01_eda.ipynb`](notebooks/01_eda.ipynb) §2 i §4 |
 | 1b. Analiza braków danych i ich powodów | [Dane](#dane) — zero pustych tekstów i etykiet, pochodzenie i czyszczenie nieudokumentowane; notebook 01 §1 |
-| 1c. Analiza wartości odstających | notebook 01 §4 (maksima długości) i §6 (teksty skrajne i niejednoznaczne) |
+| 1c. Analiza wartości odstających | [Dane](#dane) — maksima długości i teksty skrajne; notebook 01 §4 i §6 (teksty skrajne i niejednoznaczne) |
 | 1d. Utworzenie nowych cech | TF-IDF (słowa lub n-gramy znakowe) i embeddingi MiniLM — [Modele i budżet strojenia](#modele-i-budżet-strojenia); słownictwo: notebook 01 §7 |
 | 2a. Przetestowanie kilku algorytmów | Dummy, TF-IDF + LR, MiniLM + kNN, DistilBERT, LLM zero-shot (stretch) — tabele wyników w [Status](#status) |
 | 2b. Optymalizacja hiperparametrów | Optuna (TF-IDF + LR), siatka (kNN), LR × epoki (DistilBERT) — [Modele i budżet strojenia](#modele-i-budżet-strojenia); *Wrażliwość na budżet strojenia* w [Status](#status) |
