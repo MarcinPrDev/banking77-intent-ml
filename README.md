@@ -311,6 +311,41 @@ gcloud container clusters delete banking77-gke --region=europe-central2
 gcloud artifacts repositories delete banking77 --location=europe-central2
 ```
 
+## Demo
+
+Obraz z *Quickstart* (DistilBERT wpieczony w obraz CPU), `/health` i `/predict` na trzech
+zdaniach. Zdania pochodzą z `configs/smoke_cases.json` — napisane na potrzeby testu dymnego,
+nie ze zbioru BANKING77. Demo pokazuje, że usługa działa; o jakości mówią tabele wyników,
+nie te trzy zdania.
+
+```bash
+docker run --rm -p 18080:8000 banking77-intent-api:distilbert-v1
+# drugi terminal (bash; bez terminala: http://localhost:18080/docs)
+curl -s http://localhost:18080/health
+curl -s -X POST http://localhost:18080/predict -H "Content-Type: application/json" \
+  -d "{\"text\": \"My new card still hasn't arrived, when will it come?\"}"
+```
+
+Prawdziwe odpowiedzi (28.10.2026, obraz zbudowany z kodu zgodnego z `main`):
+
+```text
+{"status":"ok","model":"distilbert","model_version":"distilbert-v1"}
+{"intent":"card_arrival","intent_id":12,"score":0.9861456751823425,"model_version":"distilbert-v1"}
+{"intent":"exchange_rate","intent_id":33,"score":0.8856154680252075,"model_version":"distilbert-v1"}
+{"intent":"lost_or_stolen_card","intent_id":42,"score":0.6754384636878967,"model_version":"distilbert-v1"}
+```
+
+| Zdanie | Intencja (`intent_id`) | `score` |
+|---|---|---:|
+| My new card still hasn't arrived, when will it come? | `card_arrival` (12) | 0,986 |
+| What exchange rate will I get if I pay in euros? | `exchange_rate` (33) | 0,886 |
+| Someone stole my card, please block it right away. | `lost_or_stolen_card` (42) | 0,675 |
+
+Pusty tekst albo same spacje → `422`. `score` to wynik modelu dla zwróconej klasy, nie
+skalibrowane prawdopodobieństwo (zob. *Ograniczenia i granice weryfikacji*). Ten sam Dockerfile
+i model z Release przechodzą w CI deploy do kind i test HTTP — ostatni zielony run na `main`:
+[Deploy kind 40617499359](https://github.com/MarcinPrDev/banking77-intent-ml/actions/runs/40617499359).
+
 ## Odtworzenie wyników
 
 Quickstart odtwarza **wdrożenie** z ocenionym artefaktem z Release. Ta sekcja odtwarza **liczby**
