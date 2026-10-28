@@ -125,23 +125,25 @@ Czas treningu, VRAM i koszty CPU na sprzęcie autora zapisano w MLflow.
 
 ## Architektura (wzorce i SOLID)
 
-*Propozycja architektury przeniesiona z planu z lipca (szkic asystenta). Wybór wzorców
-potwierdza albo zmienia autor w W2 przy projekcie interfejsu predyktora — odstępstwo = ADR.*
+Trzy adaptery w `models/classifiers.py` realizują interfejs `IntentClassifier`
+z `models/predictor.py`. Fabryka w `models/factory.py` buduje lub wczytuje wybrany predyktor.
 
 - **Strategy:** wspólny interfejs predyktora (`fit / predict / predict_proba / save / load`) z
   implementacjami dla TF-IDF+LR, MiniLM+kNN i DistilBERT. API i ewaluacja widzą tylko interfejs
   — podmiana modelu = zmiana wpisu w configu, nie kodu. LLM (stretch) **poza** interfejsem
   (decyzja autora 18.10.2026): kontrakt wymaga `predict` == argmax(`predict_proba`), a odpowiedź
   spoza 77 nazw ma zostać błędem formatu, nie klasą 0 — ocena w `evaluation/llm_eval.py`.
-- **Factory** buduje predyktor z `configs/config.yaml` (nazwa strategii + hiperparametry).
-- **Pipeline'y sklearn** dla ścieżek klasycznych (wektoryzator → klasyfikator w jednym obiekcie,
-  jeden `joblib`); własne transformery (`BaseEstimator`/`TransformerMixin`) tam, gdzie trzeba.
+- **Factory:** `build_predictor` tworzy adapter zamrożonej konfiguracji,
+  a `load_predictor` wczytuje zapisany artefakt; wybór klasy przez rejestr `STRATEGIES`.
+- **Pipeline sklearn** w TF-IDF+LR: `TfidfVectorizer` → `LogisticRegression`, zapis razem
+  w `model.joblib`. W MiniLM+kNN kodowanie tekstu przez `features/embeddings.py`, a indeks
+  kNN zapisany osobno; bez własnych transformerów sklearn.
 - **LabelMap** — jedna klasa mapująca nazwa ↔ id, ładowana z przypiętego pliku; wszystkie modele
-  i API używają tej samej instancji (koniec z mieszaniem indeksów z różnych kopii danych).
+  i API korzystają z tej samej mapy etykiet.
 - **LLMClient** (stretch) — wąski interfejs `complete(prompt)`, implementacja `LiteLLMClient`
   (Groq przez LiteLLM) i `CachedClient` (cache odpowiedzi) — DIP, w testach atrapa bez sieci.
 - Mapowanie SOLID: SRP (moduły `data/features/models/evaluation/api`), OCP (nowy model = nowa
-  klasa, nie edycja istniejących), LSP (każdy predyktor przechodzi ten sam test kontraktu
+  klasa i wpis w rejestrze fabryki), LSP (każdy predyktor przechodzi ten sam test kontraktu
   zapis→odczyt→identyczne predykcje), DIP (API zależy od interfejsu, nie od torcha).
 
 ```mermaid
@@ -165,7 +167,8 @@ classDiagram
     LLMClient <|.. CachedClient
 ```
 
-Nazwy klas są robocze — ostateczne nazewnictwo i podział na moduły to decyzja autora w W2.
+Na diagramie `ClassifierFactory` oznacza funkcje w `models/factory.py`, a `PredictService`
+obsługę żądań w `api/app.py`; nie są to osobne klasy w kodzie.
 
 ## Przepływ artefaktów modelu
 
