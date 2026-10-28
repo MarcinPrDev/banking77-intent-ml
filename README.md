@@ -492,6 +492,25 @@ Zadanie jest czysto tekstowe — CV nie ma tu sensownego zastosowania. Zakres po
 kursu: Python, klasyczne ML, OOP/testy, eksperymenty (MLflow), DL/NLP (transformery), API,
 Docker, Kubernetes, CI/CD; LLM jako stretch.
 
+## Wymagania projektu końcowego — gdzie są spełnione
+
+Punkty *End-to-end* z dokumentu kursu „Wszystko o projekcie końcowym” (SAGES, gr. 06.12.2025)
+i miejsca, w których projekt je realizuje:
+
+| Wymaganie | Gdzie w repo |
+|---|---|
+| 1a. Analiza rozkładów cech | [Dane](#dane) — liczność klas w train i teście; długości tekstów: [`notebooks/01_eda.ipynb`](notebooks/01_eda.ipynb) §4 |
+| 1b. Analiza braków danych i ich powodów | [Dane](#dane) — zero pustych tekstów i etykiet, pochodzenie i czyszczenie nieudokumentowane; notebook 01 §1 |
+| 1c. Analiza wartości odstających | notebook 01 §4 (maksima długości) i §6 (teksty skrajne i niejednoznaczne) |
+| 1d. Utworzenie nowych cech | TF-IDF (słowa lub n-gramy znakowe) i embeddingi MiniLM — [Modele i budżet strojenia](#modele-i-budżet-strojenia); słownictwo: notebook 01 §7 |
+| 2a. Przetestowanie kilku algorytmów | Dummy, TF-IDF + LR, MiniLM + kNN, DistilBERT, LLM zero-shot (stretch) — tabele wyników w [Status](#status) |
+| 2b. Optymalizacja hiperparametrów | Optuna (TF-IDF + LR), siatka (kNN), LR × epoki (DistilBERT) — [Modele i budżet strojenia](#modele-i-budżet-strojenia); *Wrażliwość na budżet strojenia* w [Status](#status) |
+| 3a. Programowanie obiektowe, wzorce, SOLID | [Architektura (wzorce i SOLID)](#architektura-wzorce-i-solid) |
+| 3b. Pipeline'y do przetwarzania danych | pipeline'y sklearn i przepływ artefaktów — [Architektura](#architektura-wzorce-i-solid), [Przepływ artefaktów modelu](#przepływ-artefaktów-modelu) |
+| 3c. Testy jednostkowe | `tests/` (pytest w CI: [`ci.yaml`](.github/workflows/ci.yaml)), w tym strażnik protokołu [`tests/test_contract.py`](tests/test_contract.py) |
+| 4a. API, konteneryzacja, wdrożenie na klaster, CI/CD | FastAPI ([`src/banking77_intent_ml/api/`](src/banking77_intent_ml/api/)), [`Dockerfile`](Dockerfile), [`k8s/`](k8s/), workflow [`deploy-kind.yaml`](.github/workflows/deploy-kind.yaml) z testem HTTP — [Wdrożenie](#wdrożenie) |
+| 4b. Lokalnie lub na GCP | kind lokalnie i w CI; GKE Autopilot (stretch, 22.10) — [Wdrożenie](#wdrożenie) |
+
 ## Status
 
 - [x] Szkielet projektu (pakiet, config, CI, uv) — przeniesiony z poprzedniego tematu
