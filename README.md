@@ -216,6 +216,12 @@ w nowym procesie.
 (Docker Desktop) oraz kind v0.33.0 i kubectl ≥ 1.36 w `PATH`; do treningu DistilBERT GPU NVIDIA.
 Na Windows sprawdź też porty (niżej: *Porty lokalne*).
 
+**Kontrola na świeżym klonie (29.10.2026, autor):** klon `46f47df` → środowisko → dane z SHA-256
+→ weryfikacja plików W1 → testy i lint → modele bazowe (wyniki jak w *Wyniki na walidacji*)
+→ model z Release → obraz (budowa 97 s) → smoke `[OK]` — **ok. 7 min 15 s**, jedno potknięcie
+obsługi (smoke trzeba uruchomić w drugim terminalu, przy działającym kontenerze); ciepłe cache uv
+i Dockera, bez kind i bez treningu DistilBERT.
+
 ```bash
 # Środowisko lokalne (Python 3.11, uv) — JEDNA komenda z pełną listą extras używanych lokalnie:
 uv sync --extra dev --extra nlp --extra gpu --extra serving
