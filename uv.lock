@@ -386,6 +386,7 @@ nlp = [
 serving = [
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "prometheus-client" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 ui = [
@@ -407,6 +408,7 @@ requires-dist = [
     { name = "nbstripout", marker = "extra == 'dev'", specifier = ">=0.9.1" },
     { name = "optuna", specifier = ">=3.6" },
     { name = "pandas", specifier = ">=2.2" },
+    { name = "prometheus-client", marker = "extra == 'serving'", specifier = ">=0.25.0" },
     { name = "pyarrow", specifier = ">=16" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5" },

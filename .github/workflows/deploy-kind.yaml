@@ -89,6 +89,14 @@ jobs:
       - name: Smoke HTTP through the Service
         run: uv run python scripts/smoke_api.py --url "$SMOKE_URL" --timeout 120
 
+      - name: Metrics through the Service
+        # Service trafia w jedną z dwóch replik, więc nie sprawdzamy liczników predykcji (mogły
+        # trafić do drugiej) — tylko /health od sond, obecny na każdym podzie, i rodzinę metryk.
+        run: |
+          curl -sf "$SMOKE_URL/metrics" -o metrics.txt
+          grep -E '^banking77_http_requests_total\{method="GET",path="/health",status="200"\}' metrics.txt
+          grep -E '^# HELP banking77_predictions_total ' metrics.txt
+
       - name: Diagnostics
         if: failure()
         run: |

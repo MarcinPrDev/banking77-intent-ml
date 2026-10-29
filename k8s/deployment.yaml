@@ -22,6 +22,10 @@ spec:
     metadata:
       labels:
         app: banking77-intent-api
+      annotations:  # konwencja zbierania metryk przez Prometheusa (dodatek W5; serwera w klastrze nie ma)
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: api
