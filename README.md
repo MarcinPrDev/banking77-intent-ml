@@ -21,6 +21,26 @@ względem TF-IDF + regresji logistycznej i zamrożonych embeddingów + kNN **na 
 większy koszt uczenia i predykcji na CPU**? Wynikiem projektu jest uzasadniony wybór jednego modelu
 i działająca usługa — także wtedy, gdy najdroższy model nie wygra.
 
+## W skrócie
+
+*TODO-Marcin: napisz własnymi słowami.*
+
+## Spis treści
+
+- **Raport:** [Dane](#dane) · [Protokół ewaluacji](#protokół-ewaluacji-wspólny-dla-wszystkich-modeli)
+  · [Modele i budżet strojenia](#modele-i-budżet-strojenia) · [Wyniki](#wyniki)
+  ([tabela końcowa](#tabela-końcowa)) · [Analiza błędów](#analiza-błędów-w3)
+  · [Odpowiedź na pytanie badawcze](#odpowiedź-na-pytanie-badawcze)
+  · [Ograniczenia](#ograniczenia-i-granice-weryfikacji)
+  · [Co nie zadziałało](#co-nie-zadziałało-i-co-zrobiłbym-inaczej) · [Dalsze prace](#dalsze-prace)
+- **Uruchomienie:** [Quickstart](#quickstart) · [Demo](#demo) · [Odtworzenie wyników](#odtworzenie-wyników)
+  · [Wdrożenie](#wdrożenie)
+- **Projekt:** [Architektura](#architektura-wzorce-i-solid) · [Przepływ artefaktów modelu](#przepływ-artefaktów-modelu)
+  · [Wymagania projektu końcowego](#wymagania-projektu-końcowego--gdzie-są-spełnione)
+  · [Dlaczego bez Sparka i CV](#dlaczego-bez-sparka-i-cv) · [Status i księga godzin](#status)
+  · [Plan](#plan--5-slotów-60-h-3009--31102026) · [Historia decyzji](#historia-decyzji)
+  · [Tooling](#tooling--współpraca-z-ai) · [Licencja](#licencja)
+
 ## Dane
 
 | | Trening (`train.csv`) | Test (`test.csv`) |
@@ -556,8 +576,8 @@ i miejsca, w których projekt je realizuje:
 | 1b. Analiza braków danych i ich powodów | [Dane](#dane) — zero pustych tekstów i etykiet, pochodzenie i czyszczenie nieudokumentowane; notebook 01 §1 |
 | 1c. Analiza wartości odstających | [Dane](#dane) — maksima długości i teksty skrajne; notebook 01 §4 i §6 (teksty skrajne i niejednoznaczne) |
 | 1d. Utworzenie nowych cech | TF-IDF (słowa lub n-gramy znakowe) i embeddingi MiniLM — [Modele i budżet strojenia](#modele-i-budżet-strojenia); słownictwo: notebook 01 §7 |
-| 2a. Przetestowanie kilku algorytmów | Dummy, TF-IDF + LR, MiniLM + kNN, DistilBERT, LLM zero-shot (stretch) — tabele wyników w [Status](#status) |
-| 2b. Optymalizacja hiperparametrów | Optuna (TF-IDF + LR), siatka (kNN), LR × epoki (DistilBERT) — [Modele i budżet strojenia](#modele-i-budżet-strojenia); *Wrażliwość na budżet strojenia* w [Status](#status) |
+| 2a. Przetestowanie kilku algorytmów | Dummy, TF-IDF + LR, MiniLM + kNN, DistilBERT, LLM zero-shot (stretch) — [Wyniki](#wyniki) |
+| 2b. Optymalizacja hiperparametrów | Optuna (TF-IDF + LR), siatka (kNN), LR × epoki (DistilBERT) — [Modele i budżet strojenia](#modele-i-budżet-strojenia); [Wrażliwość na budżet strojenia](#wrażliwość-na-budżet-strojenia) |
 | 3a. Programowanie obiektowe, wzorce, SOLID | [Architektura (wzorce i SOLID)](#architektura-wzorce-i-solid) |
 | 3b. Pipeline'y do przetwarzania danych | pipeline'y sklearn i przepływ artefaktów — [Architektura](#architektura-wzorce-i-solid), [Przepływ artefaktów modelu](#przepływ-artefaktów-modelu) |
 | 3c. Testy jednostkowe | `tests/` (pytest w CI: [`ci.yaml`](.github/workflows/ci.yaml)), w tym strażnik protokołu [`tests/test_contract.py`](tests/test_contract.py) |
@@ -737,8 +757,12 @@ i miejsca, w których projekt je realizuje:
   - W4 (18–22.10): **ok. 22 h pracy przy budżecie 14 h — ok. 8 h nadwyżki** (świadome nadgodziny;
     rezerwa wyczerpana po W1). Łącznie W1–W4 ok. 70 h wobec 54 h budżetu slotów.
 
-**Wyniki na walidacji** (W1–W2; zamrożona walidacja z manifestu — do wyboru konfiguracji,
-nie do porównań z literaturą; wszystkie liczby z MLflow):
+## Wyniki
+
+### Wyniki na walidacji
+
+W1–W2; zamrożona walidacja z manifestu — do wyboru konfiguracji, nie do porównań z literaturą;
+wszystkie liczby z MLflow:
 
 | Model | Konfiguracja (zamrożona) | Acc (val) | Macro-F1 (val) | N-train / N-val | Budżet HPO | Czas treningu |
 |---|---|---:|---:|---:|---:|---:|
@@ -751,10 +775,12 @@ nie do porównań z literaturą; wszystkie liczby z MLflow):
 
 [^distilbert]: 90,76% to `val_macro_f1` z epoki 4 runu `f37e7471`; główne `macro_f1` tego runu to 90,78% z epoki 5. Różnica jest poniżej 0,001 (0,1 punktu procentowego), więc reguła remisu wybrała wcześniejszą epokę.
 
-**Rozrzut DistilBERT po seedach** (stretch 1, 18.10; decyzje autora przed wynikiem: 5 nowych
-seedów + kontrolnie 42, zamrożona konfiguracja, wynik po epoce 4 bez wyboru epoki per seed; ta
-sama zamrożona walidacja 8 504 / 1 499, test nietknięty; liczby z MLflow, badanie
-`seed_study=distilbert_val_seeds`, commit `f93d533`):
+### Rozrzut DistilBERT po seedach
+
+Stretch 1, 18.10; decyzje autora przed wynikiem: 5 nowych seedów + kontrolnie 42, zamrożona
+konfiguracja, wynik po epoce 4 bez wyboru epoki per seed; ta sama zamrożona walidacja
+8 504 / 1 499, test nietknięty; liczby z MLflow, badanie `seed_study=distilbert_val_seeds`,
+commit `f93d533`:
 
 | Seed | Acc (val) | Macro-F1 (val) | Run |
 |---|---:|---:|---|
@@ -774,8 +800,9 @@ Zmiana seeda nie odwróciła rankingu macro-F1 na tej walidacji: MiniLM + kNN po
 we wszystkich sześciu przebiegach. To ocena losowości treningu na jednym podziale, nie dowód
 przewagi na nowych danych.
 
-**Wrażliwość na budżet strojenia** (macro-F1 na tej samej zamrożonej walidacji 1 499 zdań,
-jeden seed; liczby z MLflow):
+### Wrażliwość na budżet strojenia
+
+Macro-F1 na tej samej zamrożonej walidacji 1 499 zdań, jeden seed; liczby z MLflow:
 
 | Ścieżka | Bez strojenia | Mniejszy budżet | Pełny budżet (zamrożona) | Zysk ze strojenia |
 |---|---:|---:|---:|---:|
@@ -795,8 +822,10 @@ nie jest to porównanie pełnych możliwości modeli.
 **Ograniczenie DistilBERT:** zwycięskie LR 6e-5 leży na brzegu siatki, a macro-F1 dla LR
 2e-5–4e-5 nadal rosło w 5. epoce, więc ten budżet nie wyczerpuje możliwości modelu.
 
-**Koszt na CPU** (W2, pomiar `cpu_cost_w2` z 14.10, kod z commita `aa210d7`; batch=1 przez
-wspólny interfejs predyktora, tylko CPU; liczby z MLflow):
+### Koszt na CPU
+
+W2, pomiar `cpu_cost_w2` z 14.10, kod z commita `aa210d7`; batch=1 przez wspólny interfejs
+predyktora, tylko CPU; liczby z MLflow:
 
 | Ścieżka | Wątki | Latencja p50 | Latencja p95 | Zimny start: mediana (max) | Artefakt | Run MLflow |
 |---|---:|---:|---:|---:|---:|---|
@@ -834,8 +863,10 @@ klas: `virtual_card_not_working` ma najniższe F1 (50,0%) i recall (33,3%) przy 
 model wskazał tę klasę dwukrotnie, oba razy trafnie, ale pozostałe cztery przykłady przypisał
 innym klasom; przy sześciu przykładach jedna pomyłka zmienia recall o 16,7 punktu procentowego.
 
-**Tabela końcowa** (W3, test dotknięty raz; koszt finalnych artefaktów po reficie; N-train
-10 003 dla wszystkich ścieżek; wszystkie liczby z MLflow / wykonanego kodu):
+### Tabela końcowa
+
+W3, test dotknięty raz; koszt finalnych artefaktów po reficie; N-train 10 003 dla wszystkich
+ścieżek; wszystkie liczby z MLflow / wykonanego kodu:
 
 | Model | Acc (test 3 080) | Acc (3 055) | Macro-F1 (3 080) | Macro-F1 (3 055) | Czas treningu (10 003) | Artefakt | Latencja CPU p50 / p95 | Zimny start (1 w. / 8 w.) |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -872,11 +903,12 @@ DistilBERT wybrano do wdrożenia po obejrzeniu wyników testu, z uwzględnieniem
 93,02% to wynik zamrożonego modelu, ale nie niezależne potwierdzenie tego wyboru.
 Wybór spośród trzech modeli zamrożonych przed testem; po ocenie bez dalszego strojenia.
 
-**LLM zero-shot na 385 wiadomościach testu** (stretch 2, 20.10; decyzje autora:
-`groq/openai/gpt-oss-20b`, temperatura 0, `reasoning_effort` low; odpowiedź = dokładnie jedna
-nazwa etykiety, inaczej błąd formatu liczony jako pomyłka; prompt dobrany na walidacji, test
-raz). Te same 385 wiadomości (5 na klasę, wybrane w W1) dla wszystkich ścieżek; metryki
-`llm385_*` z MLflow:
+### LLM zero-shot na 385 wiadomościach testu
+
+Stretch 2, 20.10; decyzje autora: `groq/openai/gpt-oss-20b`, temperatura 0, `reasoning_effort`
+low; odpowiedź = dokładnie jedna nazwa etykiety, inaczej błąd formatu liczony jako pomyłka; prompt
+dobrany na walidacji, test raz. Te same 385 wiadomości (5 na klasę, wybrane w W1) dla wszystkich
+ścieżek; metryki `llm385_*` z MLflow:
 
 | Ścieżka | Acc (385) | Macro-F1 (385) | Błędy formatu | Koszt i latencja | Run |
 |---|---:|---:|---:|---|---|
