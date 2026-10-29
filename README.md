@@ -91,6 +91,13 @@ testu i podzbiory 3 055 / 385 — `data/audit.py` (CLI `scripts/make_test_subset
   Najkrótsze teksty mają mało kontekstu, wśród najdłuższych są opisy weryfikacji w formie
   odpowiedzi, a podobne intencje bywają niejednoznaczne i wymagają uwagi na szczegóły.
 
+Wykresy z notebooka 01 (train, 10 003 wiadomości; notebooki w repo są bez wyników — filtr
+nbstripout — więc tu zapisane wyniki komórek, bez tekstów zdań):
+
+![Liczność 77 klas w train.csv, posortowana, z linią mediany](docs/figures/eda-class-counts-train.png)
+
+![Histogramy długości tekstów w train: znaki i słowa, z medianą](docs/figures/eda-text-lengths-train.png)
+
 ## Protokół ewaluacji (wspólny dla wszystkich modeli)
 
 1. **Przypięte:** commit, sumy plików, mapa nazw kategorii → id (`configs/label_map.json`).
@@ -943,6 +950,11 @@ lokalnych. Ekspozycja modelu na benchmark nieustalona — wynik nie dowodzi gene
 Notebook: [`notebooks/02_analiza_bledow.ipynb`](notebooks/02_analiza_bledow.ipynb) — najczęstsze pary
 pomyłek i recall per klasa z oceny końcowej (same agregaty, bez czytania zdań testowych), porównanie
 błędów trzech ścieżek po `row_id`, przegląd 20 błędów modeli W2 na walidacji; etykiety bez zmian.
+
+![Macierz pomyłek DistilBERT na teście 3 080 zdań, wiersze znormalizowane](docs/figures/distilbert-confusion-test.png)
+
+Macierz pomyłek DistilBERT na teście (3 080 zdań, wiersze znormalizowane, więc przekątna
+to recall klasy; zapisany wynik komórki notebooka 02, §1, bez tekstów zdań).
 
 Główna trudność to rozróżnianie bliskich intencji. Krótkie zdania często nie zawierają
 wystarczającego kontekstu.
