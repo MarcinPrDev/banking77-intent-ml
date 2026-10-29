@@ -102,7 +102,8 @@ nbstripout — więc tu zapisane wyniki komórek, bez tekstów zdań):
 
 1. **Przypięte:** commit, sumy plików, mapa nazw kategorii → id (`configs/label_map.json`).
 2. **Walidacja z train:** ~15% (`split.val_size`), stratyfikowana; **znormalizowane duplikaty
-   trafiają razem do jednej części**; indeksy w `dane/splits/` (poza gitem, katalog nietykalny)
+   trafiają razem do jednej części**; indeksy w `dane/splits/` (w gicie — same numery wierszy,
+   bez tekstów; katalog nietykalny)
    + manifest `configs/split_manifest.json` (git-tracked: seed, val_size, n_train, n_val,
    sha256 indeksów). Konflikty etykiet zbadane przed podziałem.
 3. **Test tylko do dwóch rzeczy:** audytu integralności i oceny końcowej. Żadnego fitu, HPO,
@@ -150,7 +151,7 @@ Liczby z publikacji to konkretne konfiguracje, nie gwarantowany przedział wynik
 | **all-MiniLM-L6-v2 (zamrożony) + kNN** | kilka `k` × ważenie (uniform/distance) | wartość reprezentacji semantycznej bez dostrajania | HF `sentence-transformers/all-MiniLM-L6-v2`, Apache-2.0, rewizja przypięta w configu |
 | **DistilBERT + głowica 77 klas** | 5 LR {2–6}e-5 × 5 epok = 25 kandydatów; budżet ustalony przed wynikami, pozostałe parametry wg Qi 2021 | efekt dostrajania reprezentacji; RTX 5080 | HF `distilbert/distilbert-base-uncased`, Apache-2.0, rewizja przypięta |
 | *(stretch A)* LLM zero-shot | brak strojenia; prompt dobrany na walidacji | koszt/latencja/błędy formatu vs modele dostrajane | Groq (plan płatny, Developer tier) przez LiteLLM; model w `llm.model` |
-| *(fallback)* TF-IDF + LinearSVC | mały grid C | trzecia metoda, gdy transformer nie ruszy | — |
+| *(fallback)* TF-IDF + LinearSVC | mały grid C | trzecia metoda, gdy transformer nie ruszy — niewykorzystany | — |
 
 Wartości liczbowe (budżety, hiperparametry startowe, seed) — wyłącznie z `configs/config.yaml`.
 Budżet DistilBERT zwiększono z 2–3 do 5 LR, by sprawdzić wartości po obu stronach 4e-5
@@ -453,6 +454,8 @@ magazynie; odpowiedzi w cache `dane/cache/llm` (przerwany przebieg bez ponownego
 
 ## Plan — 5 slotów, 60 h (30.09 → 31.10.2026)
 
+*Plan z 30.09.2026; przebieg faktyczny i księga godzin — [Status](#status).*
+
 Podział pracy: dane/protokół/EDA **10 h** · modele/HPO **12 h** · ewaluacja i analiza błędów **6 h**
 · pakiet/API/testy **8 h** · Docker/kind/CI **9 h** · raport/demo **7 h** · rezerwa **8 h**.
 Godziny slotu obejmują weekend i wieczory danego tygodnia — od 5.10.2026 każdy wieczór pn–pt
@@ -481,6 +484,9 @@ pisane w momencie decyzji.
 
 ## Minimum vs stretch
 
+*Stan na 29.10: minimum zrealizowane; stretch — seedy, LLM zero-shot, UI i GKE — zrobione w W4
+(szczegóły w [Status](#status)).*
+
 **MINIMUM (zalicza rubrykę):** EDA z audytem jakości · przypięte dane + zamrożony protokół ·
 Dummy / TF-IDF+LR / MiniLM+kNN / DistilBERT z ograniczonym HPO w MLflow · porównanie jakości
 i kosztu · analiza błędów · pakiet OOP (Strategy/Factory/pipeline'y) + pytest · FastAPI ·
@@ -501,6 +507,9 @@ rdzeniu danego wieczoru W4, z granicą w czwartek 22.10 (W5 bez nowych funkcji; 
 bez pracy). Co nie zdąży, zostaje opisane w README jako niezrobione.
 
 ## Bramka po W1 i fallback
+
+*Wynik: bramka niezaliczona 4.10, zielona przy powtórce 9.10; fallback LinearSVC niepotrzebny
+(DistilBERT działał na GPU od W1).*
 
 **Bramka (powtórka: piątek 9.10, pierwotnie niedziela 4.10) — kontynuujemy, jeśli:** dane i grupowany podział są
 odtwarzalne (fetch → make_splits → identyczny manifest), baseline uczy się sensownie ponad Dummy
@@ -635,7 +644,8 @@ i miejsca, w których projekt je realizuje:
     w MLflow i zapis/odczyt przechodzą na wieczory 5–9.10 (pierwsze do cięcia: DistilBERT, EDA)
 - [x] **2.10 — zależności pod BANKING77**: z zależności głównych usunięte `xgboost`, `duckdb`,
       `pygeohash`; dodany extra `serving` (`fastapi`, `uvicorn[standard]`, `httpx` — wymagany przez
-      `TestClient`); `optuna` zostaje do decyzji przy HPO w W2 (Optuna czy siatka)
+      `TestClient`); `optuna` zostaje do decyzji przy HPO w W2 (Optuna czy siatka) — rozstrzygnięte
+      w W2: Optuna (TPE) dla TF-IDF+LR, siatka dla kNN i DistilBERT
 - [x] **W2** (plan 10–11.10, realizacja 12–14.10): trzy ścieżki + HPO + pomiary CPU + API
   z baseline'em — **zamknięty 14.10, bramka zielona**; ADR-0002 i decyzja o reficie zapisane 14.10 (W3)
   - [x] HPO TF-IDF+LR (12.10): Optuna TPE, 16 prób na walidacji, wybór po macro-F1 (remis → mniej
@@ -1062,10 +1072,11 @@ Po oddaniu projektu (decyzja C z 13.10):
 - Kilka seedów, żeby sprawdzić stabilność wyników.
 - Front jakość–koszt: warianty, których nie da się poprawić w jednym kryterium bez pogorszenia drugiego.
 
-Dodatkowo (27.10): przedziały ufności i sparowane testy istotności różnic na zapisanych
-predykcjach. Bez ponownego treningu i strojenia pod test; taka analiza nie usuwa ograniczenia
-wynikającego z wyboru modelu po obejrzeniu testu.
+Dodatkowo (27.10):
 
+- Przedziały ufności i sparowane testy istotności różnic na zapisanych predykcjach. Bez ponownego
+  treningu i strojenia pod test; taka analiza nie usuwa ograniczenia wynikającego z wyboru modelu
+  po obejrzeniu testu.
 - OOD: nowe zgłoszenia z intencjami spoza 77 klas, obok przykładów znanych intencji.
   Sprawdzenie odrzucania nieznanych spraw i przekazywania ich człowiekowi,
   z uwzględnieniem błędnego odrzucania znanych intencji. Dobór reguły i ocena na osobnych danych.
