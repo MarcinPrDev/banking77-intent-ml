@@ -23,7 +23,15 @@ i działająca usługa — także wtedy, gdy najdroższy model nie wygra.
 
 ## W skrócie
 
-*TODO-Marcin: napisz własnymi słowami.*
+Porównałem trzy metody rozpoznawania 77 intencji bankowych i wdrożyłem wybrany model jako API
+w Dockerze, z automatycznym wdrożeniem do kind w CI.
+Na teście 3 080 wiadomości DistilBERT osiągnął accuracy 93,02%, MiniLM+kNN 92,05%,
+a TF-IDF+LR 90,81%.
+Odpowiedź na pytanie badawcze brzmi „częściowo”: przy pierwszeństwie jakości uznaję większy koszt
+DistilBERT za uzasadniony względem TF-IDF+LR (p95 rozgrzanej predykcji CPU przy jednym wątku,
+batch=1, bez narzutu HTTP: 31,42 wobec 0,43 ms), ale przewaga nad kNN nie jest jednoznaczna.
+DistilBERT wybrano po obejrzeniu wyników testu, więc wynik nie jest niezależnym potwierdzeniem
+wyboru ani dowodem opłacalności w rzeczywistym banku.
 
 ## Spis treści
 
