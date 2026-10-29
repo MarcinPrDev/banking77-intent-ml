@@ -59,13 +59,10 @@ Repo i pakiet przemianowane 2.10.2026 (wcześniej `us-accidents-ml` / `us_accide
   (`GROQ_API_KEY` tylko w `.env`/GitHub Secrets).
 - **Wykrycie istotnych PII w danych = stop i decyzja autora o rezygnacji ze zbioru.**
 
-## Szerszy kontekst (lokalne ścieżki)
+## Szerszy kontekst
 
-- Hub projektu (checklisty, powtórki per slot, decyzje z researchu):
-  `P:\Obsidian\ObsidianSync\Prywatne\Kurs AI ML\02 Praca zaliczeniowa.md`
-- Protokół i plan źródłowy: `...\Kurs AI ML\04 BANKING77 — weryfikacja tematu.md`;
-  decyzje/korekty: porównanie obu researchów (notatka 05) §6, `06 Weryfikacja…`
-- Mapa materiałów kursu: `...\Kurs AI ML\00 MAPA materiałów i źródeł.md`; archiwum: `P:\ML-AI-Szkolenie\`
+- Hub projektu, notatki researchu (protokół i plan źródłowy, decyzje i korekty), mapa materiałów
+  i archiwum kursu — notatki autora poza repo; ścieżki w `CLAUDE.local.md` (poza gitem).
 - Siostrzany ETL (Spark, CI/CD, Dataproc): https://github.com/MarcinPrDev/us-accidents-etl
 
 **Termin: 31.10.2026 (sobota) — wysyłka ≤ 31.10; 1.11 tylko poprawki po wysyłce.**
