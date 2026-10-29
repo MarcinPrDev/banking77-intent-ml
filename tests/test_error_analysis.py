@@ -6,6 +6,7 @@ predykcje modeli W2 na walidacji wyrównane z tekstami i id, nazwy klas, wykres 
 
 from __future__ import annotations
 
+import mlflow
 import numpy as np
 import pandas as pd
 import pytest
@@ -14,6 +15,7 @@ from banking77_intent_ml.data.datasets import TrainVal
 from banking77_intent_ml.data.labels import load_label_map
 from banking77_intent_ml.evaluation import error_analysis, final
 from banking77_intent_ml.evaluation.metrics import class_names, evaluate
+from banking77_intent_ml.models.factory import STRATEGIES
 
 
 def _log_test_run(settings, name: str, tmp_path) -> pd.DataFrame:
@@ -35,7 +37,13 @@ def _log_test_run(settings, name: str, tmp_path) -> pd.DataFrame:
 def test_test_artifacts_reads_tables_and_predictions(tmp_mlflow_settings, tmp_path):
     names = class_names(load_label_map(tmp_mlflow_settings.dataset.label_map_path))
     logged = {name: _log_test_run(tmp_mlflow_settings, name, tmp_path)
-              for name in ("tfidf_lr", "distilbert")}
+              for name in STRATEGIES}
+    # Dodatkowe rodziny nie mają artefaktów pełnego testu, np. LLM oceniony na 385.
+    for family in ("llm", "future_model"):
+        with mlflow.start_run(tags={"split": "test", "model_family": family}):
+            mlflow.log_metric("accuracy", 0.5)
+    with mlflow.start_run(tags={"split": "test"}):
+        mlflow.log_metric("accuracy", 0.5)
 
     artifacts = error_analysis.test_artifacts(tmp_mlflow_settings)
 
@@ -52,10 +60,22 @@ def test_test_artifacts_reads_tables_and_predictions(tmp_mlflow_settings, tmp_pa
 
 
 def test_test_artifacts_rejects_second_test_run_of_a_path(tmp_mlflow_settings, tmp_path):
-    _log_test_run(tmp_mlflow_settings, "tfidf_lr", tmp_path)
+    for name in STRATEGIES:
+        _log_test_run(tmp_mlflow_settings, name, tmp_path)
     _log_test_run(tmp_mlflow_settings, "tfidf_lr", tmp_path)
 
     with pytest.raises(ValueError, match="tfidf_lr"):
+        error_analysis.test_artifacts(tmp_mlflow_settings)
+
+
+@pytest.mark.parametrize("missing", [*STRATEGIES, None])
+def test_test_artifacts_rejects_missing_run(tmp_mlflow_settings, tmp_path, missing):
+    """Brak dowolnej ścieżki lub wszystkich runów nie może dać częściowego wyniku."""
+    if missing is not None:
+        for name in STRATEGIES:
+            if name != missing:
+                _log_test_run(tmp_mlflow_settings, name, tmp_path)
+    with pytest.raises(ValueError, match=rf"{missing or 'distilbert'}: 0 runów"):
         error_analysis.test_artifacts(tmp_mlflow_settings)
 
 
