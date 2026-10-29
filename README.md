@@ -534,6 +534,10 @@ jeśli na starcie W4 nie ma obrazu, wdrażamy baseline TF-IDF, nie czekamy na le
 
 - **FastAPI:** `POST /predict` (tekst → intencja, id, wersja modelu), `GET /health` (status +
   `MODEL_VERSION`); walidacja wejścia (Pydantic), test kontraktu odpowiedzi w pytest.
+- **Metryki (dodatek W5, 29–30.10):** `GET /metrics` w formacie Prometheusa — liczba i czas żądań
+  według metody, trasy i statusu, predykcje według intencji, rozkład `score`. Rozkład predykcji
+  i score to sygnał zmiany ruchu, nie miara jakości. Adnotacje `prometheus.io/*` w Deployment;
+  serwera Prometheus w klastrze nie ma. W CI krok po smoke sprawdza `/metrics` przez Service.
 - **Docker:** obraz CPU z wpieczonym artefaktem; jeden wybrany model. Config i mapa etykiet
   w obrazie: `COPY configs/ /app/configs/` + `ENV BANKING77_CONFIG=/app/configs/config.yaml`
   (settings liczą ścieżki od położenia configu). DistilBERT z torchem z indeksu CPU, nie

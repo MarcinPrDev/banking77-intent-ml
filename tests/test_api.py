@@ -12,8 +12,10 @@ import pytest
 
 pytest.importorskip("fastapi")
 pytest.importorskip("httpx")  # wymagany przez TestClient
+pytest.importorskip("prometheus_client")  # GET /metrics (extra `serving`)
 
 from fastapi.testclient import TestClient  # noqa: E402
+from prometheus_client import REGISTRY  # noqa: E402
 
 from banking77_intent_ml.api.app import create_app  # noqa: E402
 from banking77_intent_ml.config import load_settings  # noqa: E402
@@ -135,6 +137,49 @@ def test_version_falls_back_to_deploy_config_without_env(monkeypatch):
 
     with TestClient(app) as client:
         assert client.get("/health").json()["model_version"] == settings.deploy.model_version
+
+
+def _sample(name: str, **labels: str) -> float:
+    """Wartość metryki z rejestru domyślnego (wspólna dla testów, więc porównujemy przyrosty)."""
+    return REGISTRY.get_sample_value(name, labels) or 0.0
+
+
+def test_metrics_endpoint_exposes_prometheus_text(api):
+    client, *_ = api
+    client.get("/health")
+
+    response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert "banking77_http_requests_total" in response.text
+
+
+def test_predict_updates_intent_counter_and_score_histogram(api):
+    client, _, settings = api
+    intent = LabelMap.from_settings(settings).name(_WINNER)
+    before = _sample("banking77_predictions_total", intent=intent)
+    scores_before = _sample("banking77_prediction_score_count")
+
+    assert client.post("/predict", json={"text": "top up failed"}).status_code == 200
+
+    assert _sample("banking77_predictions_total", intent=intent) == before + 1
+    assert _sample("banking77_prediction_score_count") == scores_before + 1
+
+
+def test_requests_are_counted_by_route_and_status(api):
+    client, *_ = api
+    rejected = {"method": "POST", "path": "/predict", "status": "422"}
+    unknown = {"method": "GET", "path": "other", "status": "404"}  # dowolny URL nie tworzy etykiety
+    predictions_before = _sample("banking77_prediction_score_count")
+    before = [_sample("banking77_http_requests_total", **labels) for labels in (rejected, unknown)]
+
+    client.post("/predict", json={"text": "   "})
+    client.get("/no-such-path")
+
+    after = [_sample("banking77_http_requests_total", **labels) for labels in (rejected, unknown)]
+    assert after == [before[0] + 1, before[1] + 1]
+    assert _sample("banking77_prediction_score_count") == predictions_before  # 422 bez predykcji
 
 
 def test_deploy_config_serves_evaluated_artifact_of_api_model():

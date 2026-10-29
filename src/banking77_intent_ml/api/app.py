@@ -9,6 +9,11 @@ Predyktor i mapa etykiet ładowane raz, na starcie (lifespan). Artefakt z `deplo
 (ADR-0003: DistilBERT po reficie, oceniony na teście); wersja modelu ze zmiennej środowiskowej
 `api.model_version_env` (w obrazie), a bez niej z `deploy.model_version` — jedno źródło wersji.
 
+`GET /metrics` (dodatek W5, 29.10.2026): format Prometheusa — liczba i czas żądań według metody,
+trasy i statusu (trasy spoza aplikacji jako `other`), predykcje według intencji i rozkład `score`.
+Rozkład predykcji i score to sygnały zmiany ruchu, nie miara jakości. Rejestr domyślny jednego
+procesu (kontener uruchamia jeden proces uvicorn); serwera Prometheus w klastrze nie ma.
+
 Uruchomienie lokalne (port 8000 na tej maszynie zarezerwowany przez Windows):
 `uv run uvicorn banking77_intent_ml.api.app:create_app --factory --port 18080`
 
@@ -17,18 +22,35 @@ a model żądania powstaje w `create_app` z limitem długości z configu.
 """
 
 import os
+import time
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from pydantic import BaseModel, StringConstraints, create_model
 
 from banking77_intent_ml.config import Settings, load_settings
 from banking77_intent_ml.data.labels import LabelMap
 from banking77_intent_ml.models.factory import load_predictor
 from banking77_intent_ml.models.predictor import IntentClassifier
+
+# Na poziomie modułu: kolejne `create_app` (np. w testach) używają tych samych metryk,
+# zamiast rejestrować je drugi raz w rejestrze domyślnym.
+REQUESTS = Counter(
+    "banking77_http_requests_total", "Żądania HTTP", ["method", "path", "status"]
+)
+LATENCY = Histogram(
+    "banking77_http_request_duration_seconds", "Czas obsługi żądania HTTP", ["method", "path"]
+)
+PREDICTIONS = Counter("banking77_predictions_total", "Predykcje według intencji", ["intent"])
+SCORES = Histogram(
+    "banking77_prediction_score",
+    "Score zwróconej klasy (nieskalibrowany)",
+    buckets=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 1.0),
+)
 
 
 class PredictResponse(BaseModel):
@@ -75,11 +97,30 @@ def create_app(
     def predict(request: PredictRequest) -> PredictResponse:
         scores = app.state.predictor.predict_proba([request.text])[0]
         intent_id = int(scores.argmax())
+        intent = app.state.labels.name(intent_id)
+        score = float(scores[intent_id])
+        PREDICTIONS.labels(intent=intent).inc()
+        SCORES.observe(score)
         return PredictResponse(
-            intent=app.state.labels.name(intent_id),
+            intent=intent,
             intent_id=intent_id,
-            score=float(scores[intent_id]),
+            score=score,
             model_version=app.state.model_version,
         )
+
+    @app.get("/metrics", include_in_schema=False)
+    def metrics() -> Response:
+        return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+    known_paths = frozenset(route.path for route in app.routes)  # bez etykiet z dowolnych URL
+
+    @app.middleware("http")
+    async def record_request(request: Request, call_next):
+        start = time.perf_counter()
+        response = await call_next(request)
+        path = request.url.path if request.url.path in known_paths else "other"
+        LATENCY.labels(method=request.method, path=path).observe(time.perf_counter() - start)
+        REQUESTS.labels(method=request.method, path=path, status=str(response.status_code)).inc()
+        return response
 
     return app

@@ -45,6 +45,7 @@ serving = [
     "fastapi>=0.139.0",
     "httpx>=0.28.1",
     "uvicorn[standard]>=0.49.0",
+    "prometheus-client>=0.25.0",       # GET /metrics (dodatek W5, 29.10)
 ]
 # Obraz serwujący (W3, ADR-0003): torch z indeksu CPU — bez CUDA i pakietów nvidia-* (koło z PyPI
 # na Linuksie zawiera CUDA). Rozłączny z `gpu` ([tool.uv] conflicts); w obrazie:
