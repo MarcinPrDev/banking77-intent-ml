@@ -279,8 +279,12 @@ basal:
   # potem v1). Test raz, tylko zwycięzca: 385 (llm.eval_ids_path) i pełne 3 080. Kalibracja:
   # pliki autora modelu, bez własnej. Twarda granica: sb 31.10.2026 20:00.
   engine_version: 2.4.1
-  url: http://localhost:18090
+  url: http://127.0.0.1:18090              # nie localhost: na Windows +2 s na żądanie (IPv6 → IPv4)
   timeout_s: 60
+  # Flagi basal-serve (30.10, Windows): tryby fast/fast-nocompile odpadły — torch.compile bez
+  # Tritona, a grafy CUDA rezerwują bufory długiego kontekstu ponad VRAM (sterownik przerzuca
+  # nadmiar do RAM i serwer stoi). eager: wagi + aktywacje bieżącego żądania. Zapisywane w runach.
+  serve_args: --mode eager --template-prefix off --deterministic
   models:                                  # rewizje przypięte (Hugging Face, 30.10.2026)
     basal_4_5b:
       repo: Remek/basal-2.0-4.5B

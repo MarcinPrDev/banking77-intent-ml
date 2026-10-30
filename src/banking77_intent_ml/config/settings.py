@@ -228,6 +228,7 @@ class BasalConfig:
     label_variants: dict[str, Path]  # wariant -> JSON {nazwa intencji z mapy: opis}
     instructions: str  # treść pytania (autor); pusta = skrypt odmawia
     tie_tolerance: float
+    serve_args: str = ""  # flagi basal-serve użyte w pomiarach (zapisywane w runach)
     frozen_model: str | None = None
     frozen_labels: str | None = None
 
@@ -472,6 +473,7 @@ def _basal(raw: dict, resolve: Callable[[str], Path]) -> BasalConfig:
         label_variants={str(name): resolve(path) for name, path in raw["label_variants"].items()},
         instructions=str(raw["instructions"] or ""),
         tie_tolerance=float(raw["tie_tolerance"]),
+        serve_args=str(raw.get("serve_args") or ""),
         frozen_model=raw["frozen_model"],
         frozen_labels=raw["frozen_labels"],
     )
