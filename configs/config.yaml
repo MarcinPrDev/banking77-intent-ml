@@ -268,6 +268,36 @@ llm:
   # 081d183e i 526e5400, ta sama próbka 385 zdań).
   frozen_prompt: v2
 
+basal:
+  # Rozszerzenie po głównym badaniu (dodatek W5; prerejestracja — decyzje autora 30.10.2026,
+  # przed obliczeniami). Zero-shot Basal (Remigiusz Kinas; silnik `basal-serve`, POST
+  # /v1/systemone, Apache-2.0): wybór jednej z 77 intencji opisanych w żądaniu, bez treningu na
+  # BANKING77; odpowiedź zawsze z listy, więc bez błędów formatu. Osobne środowisko poza uv.lock
+  # (silnik wymaga transformers 5.17.0). Kandydaci: 2 modele × 2 warianty opisów etykiet; wybór
+  # po macro-F1 na tej samej próbce walidacji co LLM (llm.val_per_class na klasę, seed
+  # split.random_state); remis < tie_tolerance → tańszy wariant (najpierw mniejszy cost_rank,
+  # potem v1). Test raz, tylko zwycięzca: 385 (llm.eval_ids_path) i pełne 3 080. Kalibracja:
+  # pliki autora modelu, bez własnej. Twarda granica: sb 31.10.2026 20:00.
+  engine_version: 2.4.1
+  url: http://localhost:18090
+  timeout_s: 60
+  models:                                  # rewizje przypięte (Hugging Face, 30.10.2026)
+    basal_4_5b:
+      repo: Remek/basal-2.0-4.5B
+      revision: e5ba9149760d99b73b1963d8e0ccf948b58afacb
+      cost_rank: 1                         # 9,51 GB bf16
+    basal_11b_fp8:
+      repo: Remek/basal-2.0-max-FP8
+      revision: 6df8dbbe2c6245cb4924507c7ac6aad9e4c01a4a
+      cost_rank: 2                         # 12,31 GB FP8 — na granicy pamięci RTX 5080
+  label_variants:
+    v1: configs/basal_labels_v1.json       # nazwy intencji jako frazy (mechanicznie z mapy etykiet)
+    v2: configs/basal_labels_v2.json       # opisy autora (puste = skrypt odmawia)
+  instructions: ""                         # treść pytania — autor (pusta = skrypt odmawia)
+  tie_tolerance: 0.001
+  frozen_model: null                       # po walidacji — wpis autora wg reguły wyboru
+  frozen_labels: null
+
 mlflow:
   # tracking_uri i artifact_location NIE są kluczami configu — settings wyprowadza je z paths
   # (jedno źródło ścieżek). W kodzie: configure_mlflow(settings) z evaluation/tracking.py.
