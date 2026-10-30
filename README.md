@@ -29,7 +29,8 @@ Na teście 3 080 wiadomości DistilBERT osiągnął accuracy 93,02%, MiniLM+kNN 
 a TF-IDF+LR 90,81%.
 Odpowiedź na pytanie badawcze brzmi „częściowo”: przy pierwszeństwie jakości uznaję większy koszt
 DistilBERT za uzasadniony względem TF-IDF+LR (p95 rozgrzanej predykcji CPU przy jednym wątku,
-batch=1, bez narzutu HTTP: 31,42 wobec 0,43 ms), ale przewaga nad kNN nie jest jednoznaczna.
+batch=1, bez narzutu HTTP: 31,42 wobec 0,43 ms), ale przewaga accuracy nad kNN nie osiągnęła
+istotności w teście McNemara po korekcie Holma.
 DistilBERT wybrano po obejrzeniu wyników testu, więc wynik nie jest niezależnym potwierdzeniem
 wyboru ani dowodem opłacalności w rzeczywistym banku.
 
@@ -932,6 +933,32 @@ DistilBERT wybrano do wdrożenia po obejrzeniu wyników testu, z uwzględnieniem
 93,02% to wynik zamrożonego modelu, ale nie niezależne potwierdzenie tego wyboru.
 Wybór spośród trzech modeli zamrożonych przed testem; po ocenie bez dalszego strojenia.
 
+### Istotność różnic accuracy (3 080)
+
+Dodatek z 29–30.10. Prerejestracja analizy w commicie `0fe484a`, zapisanym przed obliczeniami.
+
+Analiza zapisanych predykcji, bez ponownego treningu i predykcji. Dokładny dwustronny test
+McNemara, korekta Holma dla trzech par, próg 0,05. Parowany bootstrap: 10 000 losowań,
+seed 42, 95% przedziały percentylowe. Parametry z `evaluation.significance` i `models.seed`.
+
+| Para (A − B) | Różnica accuracy (p.p.) | 95% przedział bootstrapu (p.p.) | p po Holmie | Istotna przy 0,05 |
+|---|---:|---:|---:|---|
+| DistilBERT − MiniLM+kNN | +0,97 | [0,03; 1,92] | 0,050315 | nie |
+| DistilBERT − TF-IDF+LR | +2,21 | [1,23; 3,15] | 0,00001598 | tak |
+| MiniLM+kNN − TF-IDF+LR | +1,23 | [0,19; 2,27] | 0,042138 | tak |
+
+Oba modele semantyczne mają istotnie wyższe accuracy niż TF-IDF+LR na tym teście.
+DistilBERT ma o 30 błędów mniej niż kNN, ale p po Holmie = 0,050315 jest większe niż 0,05.
+To nie dowód równej jakości. Przedział bootstrapu tej pary nie obejmuje zera, lecz jest
+przybliżony i liczony osobno dla pary, bez korekty wielokrotnych porównań. To inna procedura
+niż dokładny McNemar; dla tej pary korekta Holma nie zmieniła p.
+O istotności rozstrzyga wcześniej ustalony test z korektą Holma.
+
+Źródło: MLflow `546ebc7e1d2b4823b975964549568892`, tag `analysis=significance`, artefakt
+`significance.csv`; predykcje z runów `fb0d0bde`, `04ec980a`, `0c08edb4`.
+Run zapisał commit `b6d938b`; poprawka wyboru runów w loaderze została zapisana później
+jako `8120316`, więc hash runu nie obejmuje tej poprawki.
+
 ### LLM zero-shot na 385 wiadomościach testu
 
 Stretch 2, 20.10; decyzje autora: `groq/openai/gpt-oss-20b`, temperatura 0, `reasoning_effort`
@@ -1001,6 +1028,8 @@ To kompromis projektowy, nie dowód opłacalności w banku.
 Argument jakościowy mocniejszy wobec TF-IDF+LR: DistilBERT wyżej na walidacji (1 499 zdań)
 i teście (3 080 zdań). Wobec kNN wynik niejednoznaczny: na walidacji (1 499 zdań)
 wygrywał kNN, na teście (3 080 zdań) DistilBERT.
+Na teście 3 080 zdań przewaga DistilBERT nad TF-IDF+LR jest istotna po korekcie Holma,
+a nad kNN nie osiąga progu 0,05 (p po Holmie = 0,050315).
 DistilBERT wybrano dopiero po obejrzeniu wyników testu;
 93,02% na 3 080 zdaniach nie stanowi niezależnego potwierdzenia tego wyboru.
 Bez dalszego strojenia po teście i bez dowodu trwałej przewagi nad kNN.
@@ -1021,10 +1050,12 @@ Bez dalszego strojenia po teście i bez dowodu trwałej przewagi nad kNN.
   dotyczyło tylko walidacji (1 499 zdań), bez różnych podziałów danych.
   Nie potwierdza stabilności rankingu na teście. O wyborze po teście — w sekcji
   [Odpowiedź na pytanie badawcze](#odpowiedź-na-pytanie-badawcze).
-- Brak przedziałów ufności i testów istotności różnic. DistilBERT ma o 30 błędów mniej
-  niż kNN na 3 080 zdaniach, a na podzbiorze 385 — jedno trafienie więcej.
-  Nie rozstrzygamy, czy różnice wykraczają poza losowość próby. Analiza niepewności
-  dopiero po oddaniu projektu, bez zmiany konfiguracji pod obecny test.
+- [Analiza istotności na 3 080 zdaniach](#istotność-różnic-accuracy-3-080): przewaga obu modeli
+  semantycznych nad TF-IDF+LR istotna po Holmie; DistilBERT–kNN bez odrzucenia hipotezy
+  równej accuracy (p po Holmie = 0,050315). To nie dowód równoważności modeli. Bootstrap opisuje
+  niepewność próby przy ustalonych modelach, bez losowości treningu i strojenia.
+  Analiza nie usuwa ograniczenia wyboru modelu po teście. Nie obejmuje podzbioru 385,
+  na którym DistilBERT ma tylko jedno trafienie więcej niż kNN.
 - Ograniczone i różne budżety strojenia. LR DistilBERT 6e-5 na brzegu siatki;
   krzywe walidacyjne dla niższych LR jeszcze rosły. Porównanie wybranych konfiguracji,
   nie pełnych możliwości modeli. Porównanie z literaturą tylko na teście Full
@@ -1078,9 +1109,6 @@ Po oddaniu projektu (decyzja C z 13.10):
 
 Dodatkowo (27.10):
 
-- Przedziały ufności i sparowane testy istotności różnic na zapisanych predykcjach. Bez ponownego
-  treningu i strojenia pod test; taka analiza nie usuwa ograniczenia wynikającego z wyboru modelu
-  po obejrzeniu testu.
 - OOD: nowe zgłoszenia z intencjami spoza 77 klas, obok przykładów znanych intencji.
   Sprawdzenie odrzucania nieznanych spraw i przekazywania ich człowiekowi,
   z uwzględnieniem błędnego odrzucania znanych intencji. Dobór reguły i ocena na osobnych danych.

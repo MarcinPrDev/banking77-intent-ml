@@ -46,15 +46,23 @@ def _table(name: str, run_id: str) -> pd.DataFrame:
 
 
 def test_artifacts(settings: Settings) -> dict[str, TestArtifacts]:
-    """Artefakty oceny końcowej per ścieżka; więcej niż jeden run `split=test` = błąd."""
+    """Artefakty dla `STRATEGIES`; dokładnie jeden run `split=test` na każdą ścieżkę.
+
+    Pozostałe rodziny (np. LLM na podzbiorze) są pomijane. Braki i duplikaty runów
+    powodują `ValueError` przed pobraniem jakiegokolwiek artefaktu.
+    """
     configure_mlflow(settings)
     runs = mlflow.search_runs(
         experiment_names=[settings.mlflow.experiment], filter_string="tags.split = 'test'"
     )
+    families = runs.get("tags.model_family", pd.Series(index=runs.index, dtype="string"))
+    runs = runs.loc[families.isin(STRATEGIES)]
+    counts = families.value_counts().reindex(sorted(STRATEGIES), fill_value=0)
+    for name, count in counts.items():
+        if count != 1:
+            raise ValueError(f"{name}: {count} runów split=test — oczekiwano jednego")
     artifacts = {}
     for name, group in runs.groupby("tags.model_family"):
-        if len(group) != 1:
-            raise ValueError(f"{name}: {len(group)} runów split=test — oczekiwano jednego")
         run_id = group["run_id"].iloc[0]
         path = mlflow.artifacts.download_artifacts(
             run_id=run_id, artifact_path=PREDICTIONS_ARTIFACT

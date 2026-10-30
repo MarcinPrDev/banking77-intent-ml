@@ -87,6 +87,14 @@ class CostConfig:
 
 
 @dataclass(frozen=True)
+class SignificanceConfig:
+    pairs: tuple[tuple[str, str], ...]  # pary ścieżek (A, B); różnica = A − B
+    alpha: float  # poziom istotności po korekcie Holma
+    n_bootstrap: int  # losowania w parowanym bootstrapie (seed `models.seed`)
+    ci_level: float  # poziom przedziału percentylowego różnicy accuracy
+
+
+@dataclass(frozen=True)
 class EvaluationConfig:
     primary_metric: str
     selection_metric: str
@@ -94,6 +102,7 @@ class EvaluationConfig:
     clean_test_subset_path: Path  # allow-testset
     n_clean_test_expected: int
     cost: CostConfig
+    significance: SignificanceConfig
 
 
 @dataclass(frozen=True)
@@ -361,6 +370,12 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
                 passes=int(ev["cost"]["passes"]),
                 warmup=int(ev["cost"]["warmup"]),
                 cold_runs=int(ev["cost"]["cold_runs"]),
+            ),
+            significance=SignificanceConfig(
+                pairs=tuple((str(a), str(b)) for a, b in ev["significance"]["pairs"]),
+                alpha=float(ev["significance"]["alpha"]),
+                n_bootstrap=int(ev["significance"]["n_bootstrap"]),
+                ci_level=float(ev["significance"]["ci_level"]),
             ),
         ),
         models=ModelsConfig(
