@@ -959,6 +959,44 @@ O istotności rozstrzyga wcześniej ustalony test z korektą Holma.
 Run zapisał commit `b6d938b`; poprawka wyboru runów w loaderze została zapisana później
 jako `8120316`, więc hash runu nie obejmuje tej poprawki.
 
+### Kalibracja score na teście (3 080)
+
+Dodatek z 31.10. Prerejestracja `2b81dcf`, przed obliczeniami: cztery modele,
+15 przedziałów równej szerokości na [0, 1]. Przedziały domknięte z prawej `(a, b]`,
+pierwszy obejmuje także 0. Analiza zapisanych predykcji, bez ponownej predykcji,
+dopasowania kalibracji ani zmiany wyboru modelu.
+
+Pewność to `score` wybranej klasy, a trafienie to zgodność z etykietą.
+ECE: średnia bezwzględna różnica między accuracy a średnią pewnością w przedziałach,
+ważona ich licznościami. Niższa wartość oznacza lepszą zgodność w tym pomiarze.
+
+| Model | N | Accuracy | Średnia pewność | ECE (skala 0–1) |
+|---|---:|---:|---:|---:|
+| DistilBERT | 3 080 | 0,9302 | 0,9355 | 0,0096 |
+| TF-IDF + LR | 3 080 | 0,9081 | 0,8763 | 0,0332 |
+| Basal 4,5B v2 | 3 080 | 0,8039 | 0,8894 | 0,0908 |
+| Basal ultra v2 | 3 080 | 0,8481 | 0,9295 | 0,0814 |
+
+Źródło: MLflow `5203c896710a4ddd803958e0935be1cb`, tag `analysis=calibration`,
+artefakty `calibration_summary.csv` i `calibration_bins.csv`.
+
+![Kalibracja score czterech modeli na 3 080 zdaniach testu](docs/figures/calibration-reliability-test.png)
+
+Góra: słupki — accuracy w przedziale, czerwone kreski — średnia pewność (kreska nad słupkiem:
+pewność zawyżona, poniżej jego szczytu: zaniżona), linia przerywana — idealna kalibracja.
+Dół: liczności w skali logarytmicznej. Wykres z tabel CSV runu (`calibration_report.py --redraw`).
+DistilBERT ma najniższe ECE w tym pomiarze. TF-IDF+LR średnio zaniża pewność względem
+accuracy, a oba warianty Basala ją zawyżają. Kalibracja dostarczona z Basalem nie zapewniła
+zgodności score z częstością trafień na BANKING77. Wyższa accuracy ultra niż 4,5B nie usuwa
+tego problemu. Niskie ECE DistilBERT nie gwarantuje poprawnej pewności dla każdej klasy ani OOD.
+
+ECE zależy od liczby i granic przedziałów. Mierzymy tylko score wybranej klasy, nie cały
+rozkład po 77 klasach. Brak przedziałów ufności; różnic ECE nie uznajemy za potwierdzone
+statystycznie. kNN pominięty zgodnie z prerejestracją (przy k = 1 score zawsze 1,0),
+LLM — z powodu braku score w zapisanym runie testowym.
+Temperature scaling pozostaje w *Dalszych pracach*, na nowych oznaczonych danych.
+Ten pomiar opisuje zamrożone modele; nie służy dopasowaniu kalibracji ani progów na teście.
+
 ### LLM zero-shot na 385 wiadomościach testu
 
 Stretch 2, 20.10; decyzje autora: `groq/openai/gpt-oss-20b`, temperatura 0, `reasoning_effort`
@@ -1020,7 +1058,8 @@ Zero-shot: bez dostrajania wag w tym projekcie i bez przykładów w żądaniu.
 Ekspozycja Basala na BANKING77 podczas wcześniejszego treningu nieustalona.
 Wspólna instrukcja dla obu wariantów; v1 to nazwy etykiet zapisane jako frazy,
 a v2 — krótkie opisy. Niejednoznaczne nazwy sprawdzone wyłącznie na części treningowej.
-Kalibracja dostarczona z modelem, bez własnej kalibracji ani potwierdzenia jej jakości na BANKING77.
+Kalibracja dostarczona z modelem, bez własnego dopasowania. Jej jakość na BANKING77 zmierzona
+na zapisanych predykcjach — zob. [Kalibracja score](#kalibracja-score-na-teście-3-080).
 
 Walidacja: te same 385 zdań co dla LLM, po 5 na klasę, zgodny `sha256_val_sample` w runach.
 Każdy wariant oceniony raz. Wybór według macro-F1; różnica od najlepszego wyniku poniżej
