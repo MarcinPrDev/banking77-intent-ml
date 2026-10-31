@@ -1,6 +1,7 @@
 """Testy dodatku Basal (W5): prerejestracja, opisy etykiet, klient i reguła wyboru — bez serwera.
 
 Decyzje autora 30.10.2026: 2 modele × 2 warianty opisów, wybór na walidacji, test raz.
+31.10.2026: model 11B FP8 odpadł z przyczyn technicznych (opis w configu) — zostaje 4,5B × 2.
 """
 
 from __future__ import annotations
@@ -20,13 +21,13 @@ def _label_names(settings) -> list[str]:
     return [name for name, _ in sorted(labels.items(), key=lambda item: item[1])]
 
 
-def test_preregistration_has_two_models_and_two_label_variants():
+def test_preregistration_models_and_two_label_variants():
     basal = load_settings().basal
 
     assert basal is not None
-    assert sorted(basal.models) == ["basal_11b_fp8", "basal_4_5b"]
+    assert sorted(basal.models) == ["basal_4_5b"]  # 11B odpadł 31.10 (przyczyny techniczne)
     assert sorted(basal.label_variants) == ["v1", "v2"]
-    assert len({model.cost_rank for model in basal.models.values()}) == 2  # remis rozstrzygalny
+    assert len({model.cost_rank for model in basal.models.values()}) == len(basal.models)
     assert all(len(model.revision) == 40 for model in basal.models.values())  # przypięty commit
     assert 0 < basal.tie_tolerance < 0.01
 

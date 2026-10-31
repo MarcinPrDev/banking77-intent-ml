@@ -273,7 +273,8 @@ basal:
   # przed obliczeniami). Zero-shot Basal (Remigiusz Kinas; silnik `basal-serve`, POST
   # /v1/systemone, Apache-2.0): wybór jednej z 77 intencji opisanych w żądaniu, bez treningu na
   # BANKING77; odpowiedź zawsze z listy, więc bez błędów formatu. Osobne środowisko poza uv.lock
-  # (silnik wymaga transformers 5.17.0). Kandydaci: 2 modele × 2 warianty opisów etykiet; wybór
+  # (silnik wymaga transformers 5.17.0). Kandydaci: 2 modele × 2 warianty opisów etykiet (31.10:
+  # model 11B odpadł technicznie — opis przy `models`); wybór
   # po macro-F1 na tej samej próbce walidacji co LLM (llm.val_per_class na klasę, seed
   # split.random_state); remis < tie_tolerance → tańszy wariant (najpierw mniejszy cost_rank,
   # potem v1). Test raz, tylko zwycięzca: 385 (llm.eval_ids_path) i pełne 3 080. Kalibracja:
@@ -292,10 +293,12 @@ basal:
       repo: Remek/basal-2.0-4.5B
       revision: e5ba9149760d99b73b1963d8e0ccf948b58afacb
       cost_rank: 1                         # 9,51 GB bf16
-    basal_11b_fp8:
-      repo: Remek/basal-2.0-max-FP8
-      revision: 6df8dbbe2c6245cb4924507c7ac6aad9e4c01a4a
-      cost_rank: 2                         # 12,31 GB FP8 — na granicy pamięci RTX 5080
+    # Zmiana prerejestracji 31.10 (decyzja autora, przed odczytem wyników walidacji 4,5B): kandydat
+    # basal_11b_fp8 (Remek/basal-2.0-max-FP8 @ 6df8dbbe2c6245cb4924507c7ac6aad9e4c01a4a, 12,31 GB)
+    # odpada z przyczyn technicznych. Format ModelOpt FP8 silnik wczytuje tylko w trybach z grafami:
+    # fp8 wymaga torch.compile (brak Tritona na Windows), a w fast-nocompile wagi i bufory KV
+    # (ok. 3,4 GB) przekraczają 16 GB. eager (transformers) nie zna ModelOpt: pomija kwantyzację
+    # i wczytuje wagi FP8 bez skal — wyniki bez sensu, bez błędu. Reguła bez zmian: v1 vs v2 na 4,5B.
   label_variants:
     v1: configs/basal_labels_v1.json       # nazwy intencji jako frazy (mechanicznie z mapy etykiet)
     v2: configs/basal_labels_v2.json       # opisy autora (puste = skrypt odmawia)
