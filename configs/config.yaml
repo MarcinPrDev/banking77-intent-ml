@@ -282,8 +282,10 @@ basal:
   url: http://127.0.0.1:18090              # nie localhost: na Windows +2 s na żądanie (IPv6 → IPv4)
   timeout_s: 60
   # Flagi basal-serve (30.10, Windows): tryby fast/fast-nocompile odpadły — torch.compile bez
-  # Tritona, a grafy CUDA rezerwują bufory długiego kontekstu ponad VRAM (sterownik przerzuca
-  # nadmiar do RAM i serwer stoi). eager: wagi + aktywacje bieżącego żądania. Zapisywane w runach.
+  # Tritona, a rozgrzewka grafów CUDA (kształty do 8 192 tokenów) nie mieści się w 16 GB obok wag:
+  # sterownik przerzuca nadmiar do RAM i serwer stoi. Ponownie 31.10: bez limitu to samo (2,4 GB
+  # w RAM po 100 s), z limitem PyTorcha 82% brak pamięci w rozgrzewce (atencja kształtu 4 × 2 816;
+  # torch dla Windows bez FlashAttention). eager: wagi + aktywacje żądania. Zapisywane w runach.
   serve_args: --mode eager --template-prefix off --deterministic
   models:                                  # rewizje przypięte (Hugging Face, 30.10.2026)
     basal_4_5b:

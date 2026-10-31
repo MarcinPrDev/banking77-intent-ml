@@ -3,7 +3,7 @@
 Serwer Basal działa w osobnym środowisku (P:\\Repos\\basal-runtime, transformers 5.17.0), offline
 (HF_HUB_OFFLINE=1), z katalogu przypiętej rewizji w cache HF i flagami z `basal.serve_args`:
   basal-serve --model <cache HF>/snapshots/<rewizja> --name <served_name> --mode eager
-              --template-prefix off --deterministic --port 18090
+              --template-prefix off --deterministic --host 127.0.0.1 --port 18090
 `--name` = `models.basal.served_name(model)` (repo@7 znaków rewizji) — klient odmawia odpowiedzi
 od innego modelu. Uruchomienie (z korzenia repo, środowisko projektu):
   uv run python scripts/basal_zero_shot.py --stage val --candidate basal_4_5b --labels v1
