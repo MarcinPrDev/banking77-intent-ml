@@ -1245,10 +1245,10 @@ Dodatkowo (27.10):
 
 Dodatkowo (31.10):
 
-- Kolejne modele Basal: niebadane warianty, np. `mini`, oraz 11B FP8. Wariant `omni ultra`
-  został już oceniony w badaniu 2. Ten sam protokół: wybór wariantu na walidacji 385,
-  jeden przebieg testu dla zamrożonego wyboru. Dla 11B FP8 potrzebne GPU, na którym zmieszczą
-  się tryby z grafami CUDA.
+- Kolejne modele Basal: niebadane warianty, np. `mini`, oraz 11B FP8. Wariant
+  `basal-omni-1.0-ultra` został już oceniony w badaniu 2. Ten sam protokół: wybór wariantu
+  na walidacji 385, jeden przebieg testu dla zamrożonego wyboru. Dla 11B FP8 potrzebne GPU,
+  na którym zmieszczą się tryby z grafami CUDA.
 
 ## Historia decyzji
 
