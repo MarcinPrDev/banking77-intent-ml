@@ -41,6 +41,7 @@ wyboru ani dowodem opłacalności w rzeczywistym banku.
 
 ## Spis treści
 
+- **Skrót na 2 minuty:** [docs/PITCH.md](docs/PITCH.md)
 - **Raport:** [Dane](#dane) · [Protokół ewaluacji](#protokół-ewaluacji-wspólny-dla-wszystkich-modeli)
   · [Modele i budżet strojenia](#modele-i-budżet-strojenia) · [Wyniki](#wyniki)
   ([tabela końcowa](#tabela-końcowa)) · [Analiza błędów](#analiza-błędów-w3)
