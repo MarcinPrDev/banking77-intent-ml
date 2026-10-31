@@ -256,8 +256,8 @@ w nowym procesie.
 
 ## Quickstart
 
-**Wymagania przed startem:** Python 3.11 i uv; `gh` zalogowany na konto z dostępem do repo
-(pobranie modelu z Release, dopóki repo jest prywatne); do obrazu i klastra uruchomiony Docker
+**Wymagania przed startem:** Python 3.11 i uv; `curl` (model z GitHub Release — repo publiczne
+od 31.10.2026, pobranie bez logowania); do obrazu i klastra uruchomiony Docker
 (Docker Desktop) oraz kind v0.33.0 i kubectl ≥ 1.36 w `PATH`; do treningu DistilBERT GPU NVIDIA.
 Na Windows sprawdź też porty (niżej: *Porty lokalne*).
 
@@ -288,11 +288,12 @@ uv run ruff check .
 # trening DistilBERT wymaga --extra gpu (accelerate + CUDA).
 ```
 
-**Model do API i obrazu** — oceniony artefakt `models/final/distilbert` z GitHub Release (`gh`
-zalogowany na konto z dostępem do repo) albo z refitu (`uv run python scripts/refit_final.py`):
+**Model do API i obrazu** — oceniony artefakt `models/final/distilbert` z GitHub Release
+(bez logowania; alternatywnie `gh release download distilbert-v1 -p distilbert-v1.tar -D dist`)
+albo z refitu (`uv run python scripts/refit_final.py`):
 
 ```bash
-gh release download distilbert-v1 -p distilbert-v1.tar -D dist
+curl -L --create-dirs -o dist/distilbert-v1.tar https://github.com/MarcinPrDev/banking77-intent-ml/releases/download/distilbert-v1/distilbert-v1.tar
 uv run python scripts/model_release.py unpack dist/distilbert-v1.tar   # weryfikacja → models/final/distilbert
 ```
 
@@ -604,7 +605,8 @@ Dane to **~1 MB** (13 083 krótkich zdań; mediana 10 słów w train i 9 w test,
 Każdy krok — wczytanie, TF-IDF, embeddingi, nawet fine-tuning — mieści się w pamięci jednej maszyny;
 Spark ETL dodałby infrastrukturę bez uzasadnienia w objętości danych („big data w chmurze" — Spark
 ETL, Dataproc, CI/CD — zrealizowano w siostrzanym repo
-[us-accidents-etl](https://github.com/MarcinPrDev/us-accidents-etl)).
+[us-accidents-etl](https://github.com/MarcinPrDev/us-accidents-etl); to repo jest prywatne —
+ćwiczenie z kursu wzorowane na materiałach prowadzącego, dostęp na prośbę).
 Zadanie jest czysto tekstowe — CV nie ma tu sensownego zastosowania. Zakres powtórki
 kursu: Python, klasyczne ML, OOP/testy, eksperymenty (MLflow), DL/NLP (transformery), API,
 Docker, Kubernetes, CI/CD; LLM jako stretch.
