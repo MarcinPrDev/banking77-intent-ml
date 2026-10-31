@@ -75,3 +75,10 @@ błąd HTTP przerywa run bez zapisu w MLflow.
 - Czas klienta (`latency_wall_*`) obejmuje tunel do centrum danych — porównywalny jest tylko
   czas po stronie serwera (`latency_server_*`), i to na innym GPU niż RTX 5080.
 - Po teście: zatrzymać i usunąć maszynę (rozliczenie za godziny) oraz klucz SSH u dostawcy.
+
+Przebieg 31.10.2026 (czas lokalny, CET): walidacja v1 11:02–11:05, v2 11:05–11:12; wpis frozen
+`aad7425` o 12:28; test 12:29:43–13:18:02 (3 080 żądań, ok. 48 min; run `b855251a`). Pod
+usunięty zaraz po teście (lista podów pusta), tunel zamknięty. Klucz SSH był tylko w zmiennej
+`PUBLIC_KEY` poda, więc u dostawcy nie było czego usuwać. Pod działał 10:50:32–13:18
+(ok. 2 h 28 min) przy stawce $3,99/h; kwota z rozliczeń RunPod do odczytu, bo rozliczenie
+godzinowe pojawia się z opóźnieniem.
