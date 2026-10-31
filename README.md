@@ -786,11 +786,24 @@ i miejsca, w których projekt je realizuje:
   - Co nie zadziałało: Groq zwracał błędy 429 przy limicie 8 000 tokenów/min — pomogła zmiana
     planu; przy małym limicie odpowiedzi rozumowanie zużywało go w całości, więc odpowiedź
     była pusta. W nowym projekcie GCP konto usługi węzłów nie miało żadnych ról.
-- [ ] W5 (31.10): raport, demo, reprodukowalność, **oddanie**
-- [ ] gitleaks + LICENSE → upublicznienie repo (najpóźniej przy wysyłce)
-  - [x] gitleaks v8.30.1 (28.10): `gitleaks git --log-opts="--all" --redact` — 123 commity
-    we wszystkich refach (gałęzie, tagi), brak wycieków
-  - [x] `LICENSE` (MIT, 28.10)
+- [x] **W5** (27–31.10; wysyłka przesunięta na pn 2.11 — decyzja autora 31.10): raport, demo,
+  reprodukowalność, dodatki, oddanie
+  - [x] Raport (27–29.10): odpowiedź na pytanie badawcze, ograniczenia, co nie zadziałało,
+    tabela wymagań projektu, EDA w *Dane*, koszt GKE z rozliczeń, spis treści i korekta spójności
+  - [x] Test obrony „całość” (28–29.10): 21 pytań, w tym 3 system design
+  - [x] Kontrola na świeżym klonie (29.10): ok. 7 min 15 s — *Quickstart*
+  - [x] gitleaks v8.30.1 czysty (`gitleaks git --log-opts="--all" --redact`; 28.10: 123 commity,
+    31.10: 168 commitów we wszystkich refach); `LICENSE` MIT (28.10); repo publiczne od 31.10
+    (PR #8), model z Release przez `curl` bez logowania
+  - [x] Dodatki po głównym badaniu, bez zmiany modelu do wdrożenia, każdy przez PR z zielonym
+    CI i Deploy kind: metryki Prometheusa (PR #2), test istotności na 3 080 (PR #3), Basal
+    zero-shot 4,5B (PR #4) i ultra na H100 (PR #5), opis kalibracji (PR #6), GIF, Space na
+    Hugging Face i `docs/PITCH.md` (PR #7)
+  - [x] Tag `v1.0-submission` — oznacza tę wersję kodu i README (31.10)
+  - [ ] Wysyłka do prowadzącego (pn 2.11)
+  - Co nie zadziałało: plan zakładał wysyłkę 31.10, ale dodatki po głównym badaniu (Basal,
+    kalibracja, demo online) przesunęły ją na 2.11. Model Basal 11B FP8 odpadł technicznie
+    (tryby z grafami CUDA na Windows), a Space Docker na Hugging Face wymaga konta PRO.
 - [x] **2.10 — zmiana nazwy** repo, pakietu i folderu na `banking77-intent-ml` /
       `banking77_intent_ml` (`docs/RENAME.md`)
 - [x] **2.10 — porządki po poprzednim temacie**: notebook EDA, `csv_to_parquet.py`, `sanity_w1.py`
@@ -803,6 +816,9 @@ i miejsca, w których projekt je realizuje:
   - W3 (14–18.10): **14 h pracy przy budżecie 14 h — 0 h nadwyżki**; rezerwa nadal zużyta 8 z 8 h.
   - W4 (18–22.10): **ok. 22 h pracy przy budżecie 14 h — ok. 8 h nadwyżki** (świadome nadgodziny;
     rezerwa wyczerpana po W1). Łącznie W1–W4 ok. 70 h wobec 54 h budżetu slotów.
+  - W5 (26–31.10): **24 h pracy przy budżecie 6 h — 18 h nadwyżki** (świadome nadgodziny:
+    wieczory 26–30.10 i dodatki 29–31.10), w tym ok. 21 h w sesjach z asystentem (znaczniki
+    czasu sesji, przerwa powyżej 30 min kończy blok). Łącznie W1–W5 ok. 94 h wobec 60 h planu.
 
 ## Wyniki
 
