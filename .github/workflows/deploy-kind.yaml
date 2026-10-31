@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read  # GITHUB_TOKEN: pobranie assetu z Release prywatnego repo
+  contents: read  # GITHUB_TOKEN: pobranie assetu z Release (działa też przy repo prywatnym)
 
 concurrency:
   group: deploy-kind-${{ github.ref }}
@@ -45,7 +45,7 @@ jobs:
           uv run python scripts/model_release.py env
 
       - name: Free disk space
-        # obraz 3,18 GB + archiwum `kind load` + kopia w węźle kind; runner prywatny: 14 GB SSD
+        # obraz 3,18 GB + archiwum `kind load` + kopia w węźle kind; runner GitHub: 14 GB SSD
         run: |
           df -h /
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
