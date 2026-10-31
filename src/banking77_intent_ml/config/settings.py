@@ -96,6 +96,13 @@ class SignificanceConfig:
 
 
 @dataclass(frozen=True)
+class CalibrationConfig:
+    models: tuple[str, ...]  # ścieżki z `STRATEGIES` albo kandydaci Basala (tag `candidate`)
+    n_bins: int  # przedziały równej szerokości na [0, 1], domknięte z prawej
+    figure_path: Path  # wykres niezawodności (README)
+
+
+@dataclass(frozen=True)
 class EvaluationConfig:
     primary_metric: str
     selection_metric: str
@@ -104,6 +111,7 @@ class EvaluationConfig:
     n_clean_test_expected: int
     cost: CostConfig
     significance: SignificanceConfig
+    calibration: CalibrationConfig
 
 
 @dataclass(frozen=True)
@@ -403,6 +411,11 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
                 alpha=float(ev["significance"]["alpha"]),
                 n_bootstrap=int(ev["significance"]["n_bootstrap"]),
                 ci_level=float(ev["significance"]["ci_level"]),
+            ),
+            calibration=CalibrationConfig(
+                models=tuple(str(name) for name in ev["calibration"]["models"]),
+                n_bins=int(ev["calibration"]["n_bins"]),
+                figure_path=_abs(ev["calibration"]["figure_path"]),
             ),
         ),
         models=ModelsConfig(
