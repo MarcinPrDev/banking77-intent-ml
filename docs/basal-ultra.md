@@ -80,5 +80,6 @@ Przebieg 31.10.2026 (czas lokalny, CET): walidacja v1 11:02–11:05, v2 11:05–
 `aad7425` o 12:28; test 12:29:43–13:18:02 (3 080 żądań, ok. 48 min; run `b855251a`). Pod
 usunięty zaraz po teście (lista podów pusta), tunel zamknięty. Klucz SSH był tylko w zmiennej
 `PUBLIC_KEY` poda, więc u dostawcy nie było czego usuwać. Pod działał 10:50:32–13:18
-(ok. 2 h 28 min) przy stawce $3,99/h; kwota z rozliczeń RunPod do odczytu, bo rozliczenie
-godzinowe pojawia się z opóźnieniem.
+(ok. 2 h 28 min) przy stawce $3,99/h. Rozliczenia RunPod (odczyt 31.10 ok. 14:55): 9,90 USD,
+w tym GPU 9,83 i dyski 0,07; innych opłat na koncie tego dnia nie było. Z tego ok. 1 h 18 min
+(11:12–12:29) pod czekał na wpis frozen, a sam test trwał 48 min.
