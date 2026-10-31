@@ -19,7 +19,9 @@ na benchmarku [BANKING77](https://github.com/PolyAI-LDN/task-specific-datasets) 
 ![Demo: UI Streamlit nad API z modelem distilbert-v1 — dwie wiadomości i zwrócone intencje](docs/figures/demo-ui.gif)
 
 *Demo z 31.10.2026: UI Streamlit (stretch 3) nad lokalnym API z modelem `distilbert-v1`.
-Zdania kontrolne z `configs/smoke_cases.json`, spoza zbioru BANKING77; szczegóły w [Demo](#demo).*
+Zdania kontrolne z `configs/smoke_cases.json`, spoza zbioru BANKING77; szczegóły w [Demo](#demo).
+Demo online z tym samym modelem:
+[Hugging Face Space `MarcinPr/banking77-intent-demo`](https://huggingface.co/spaces/MarcinPr/banking77-intent-demo).*
 
 **Pytanie badawcze:** czy dostrajany mały transformer (DistilBERT) poprawia jakość klasyfikacji
 względem TF-IDF + regresji logistycznej i zamrożonych embeddingów + kNN **na tyle, żeby uzasadnić
@@ -371,6 +373,13 @@ Obraz z *Quickstart* (DistilBERT wpieczony w obraz CPU), `/health` i `/predict` 
 zdaniach. Zdania pochodzą z `configs/smoke_cases.json` — napisane na potrzeby testu dymnego,
 nie ze zbioru BANKING77. Demo pokazuje, że usługa działa; o jakości mówią tabele wyników,
 nie te trzy zdania.
+
+**Online (31.10.2026):** [Hugging Face Space `MarcinPr/banking77-intent-demo`](https://huggingface.co/spaces/MarcinPr/banking77-intent-demo)
+— Streamlit z tym samym artefaktem `distilbert-v1` ładowanym w procesie, bez API; kod
+w [`hf_space/`](hf_space/), wagi wysłane z `models/final/distilbert` (SHA-256 w karcie Space'a).
+Predykcja jak w adapterze projektu: 14 zdań kontrolnych daje te same intencje co API, score różni
+się najwyżej o 9,5e-7. Space Docker na CPU basic (na Hugging Face wymaga konta PRO); po dłuższej
+bezczynności usypia, więc pierwsze wejście trwa dłużej.
 
 ```bash
 docker run --rm -p 18080:8000 banking77-intent-api:distilbert-v1

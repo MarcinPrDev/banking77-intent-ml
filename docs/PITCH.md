@@ -42,8 +42,10 @@ niezależnym potwierdzeniem wyboru.
 
 FastAPI (`/predict`, `/health`, `/metrics`) → obraz Docker (CPU) → **kind w GitHub Actions**:
 build, deploy i test HTTP przy każdym pushu na `main`. Jednorazowo ten sam obraz na GKE Autopilot
-(22.10.2026). UI w Streamlit. Odtworzenie ze świeżego klonu do działającego kontenera:
-ok. 7 min 15 s (ciepłe cache uv i Dockera, bez kind i bez treningu DistilBERT).
+(22.10.2026). UI w Streamlit; **demo online:**
+[Hugging Face Space](https://huggingface.co/spaces/MarcinPr/banking77-intent-demo).
+Odtworzenie ze świeżego klonu do działającego kontenera: ok. 7 min 15 s (ciepłe cache uv
+i Dockera, bez kind i bez treningu DistilBERT).
 
 ```mermaid
 flowchart LR
