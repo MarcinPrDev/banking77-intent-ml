@@ -78,6 +78,17 @@ evaluation:
     alpha: 0.05                            # po korekcie Holma
     n_bootstrap: 10000
     ci_level: 0.95                         # przedział percentylowy różnicy accuracy (A − B)
+  # Opis kalibracji na ZAPISANYCH predykcjach testu 3080 (dodatek W5; prerejestracja — decyzje
+  # autora 31.10.2026, przed obliczeniami): pewność = zapisany `score` wybranej klasy (top-label),
+  # trafienie = y_pred == y_true. Przedziały równej szerokości na [0, 1], domknięte z prawej
+  # (a, b]; pierwszy [0, 1/n_bins]. ECE = suma po niepustych przedziałach n_b / N · |acc_b − pewność_b|
+  # (acc_b i pewność_b — średnie w przedziale). Opis bez dopasowania kalibracji, strojenia i wyboru
+  # modelu; temperature scaling DistilBERT zostaje w Dalszych pracach (nowe dane). Poza analizą:
+  # minilm_knn (n_neighbors 1 — score zawsze 1,0) i LLM (run testowy bez score).
+  calibration:
+    models: [distilbert, tfidf_lr, basal_4_5b, basal_omni_ultra]  # STRATEGIES + kandydaci Basala (tag candidate)
+    n_bins: 15
+    figure_path: docs/figures/calibration-reliability-test.png    # wykres niezawodności do README
 
 models:
   seed: 42                                 # seed treningu (osobny od split.random_state — ten sam numer, inna rola)
