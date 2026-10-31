@@ -2,11 +2,14 @@
 
 Decyzje autora 30.10.2026: 2 modele × 2 warianty opisów, wybór na walidacji, test raz.
 31.10.2026: model 11B FP8 odpadł z przyczyn technicznych (opis w configu) — zostaje 4,5B × 2.
+31.10.2026, badanie 2 (`basal_ultra`): basal-omni-1.0-ultra × 2 — ten sam protokół, osobny tag
+walidacji i osobny budżet testu; klient ponawia żądanie tylko po zerwanym połączeniu.
 """
 
 from __future__ import annotations
 
 import json
+import urllib.error
 from dataclasses import replace
 
 import pytest
@@ -30,6 +33,37 @@ def test_preregistration_models_and_two_label_variants():
     assert len({model.cost_rank for model in basal.models.values()}) == len(basal.models)
     assert all(len(model.revision) == 40 for model in basal.models.values())  # przypięty commit
     assert 0 < basal.tie_tolerance < 0.01
+
+
+def test_ultra_study_repeats_protocol_of_first_study():
+    settings = load_settings()
+    first, ultra = settings.basal, settings.basal_ultra
+
+    assert ultra is not None
+    assert sorted(ultra.models) == ["basal_omni_ultra"]
+    assert all(len(model.revision) == 40 for model in ultra.models.values())
+    assert ultra.label_variants == first.label_variants
+    assert ultra.instructions == first.instructions
+    assert (ultra.tie_tolerance, ultra.serve_args, ultra.engine_version) == (
+        first.tie_tolerance, first.serve_args, first.engine_version)
+
+
+def test_studies_have_separate_validation_tags():
+    assert basal_eval.val_study_name("basal") == "basal_val_candidates"  # tag runów 4,5B
+    assert basal_eval.val_study_name("basal_ultra") == "basal_ultra_val_candidates"
+
+
+def test_unknown_study_is_refused():
+    with pytest.raises(ValueError, match="nieznane badanie"):
+        basal_eval.study_config(load_settings(), "basal_11b")
+
+
+def test_ultra_label_criteria_and_served_name():
+    settings = load_settings()
+    model = settings.basal_ultra.models["basal_omni_ultra"]
+
+    assert len(basal_eval.label_criteria(settings, "v2", "basal_ultra")) == 77
+    assert basal.served_name(model) == "basal-omni-1.0-ultra@6d5ba67"
 
 
 def test_label_variant_files_cover_label_map_in_id_order():
@@ -89,6 +123,52 @@ def test_served_name_identifies_repo_and_revision():
     model = load_settings().basal.models["basal_4_5b"]
 
     assert basal.served_name(model) == "basal-2.0-4.5B@e5ba914"
+
+
+class _Response:
+    def __init__(self, payload):
+        self.body = json.dumps(payload).encode("utf-8")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self):
+        return self.body
+
+
+def test_http_client_retries_dropped_connection(monkeypatch):
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append(request)
+        if len(calls) == 1:
+            raise ConnectionResetError("tunel zerwany")
+        return _Response(_payload("age_limit", CRITERIA))
+
+    monkeypatch.setattr(basal.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(basal.time, "sleep", lambda seconds: None)
+    client = basal.HttpBasalClient("http://x", 1.0, "basal-2.0-4.5B@e5ba914", retries=2)
+
+    assert client.decide("msg", CRITERIA, "Pick.").choice == "age_limit"
+    assert len(calls) == 2
+
+
+def test_http_client_does_not_retry_http_errors(monkeypatch):
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append(request)
+        raise urllib.error.HTTPError(request.full_url, 422, "Unprocessable", None, None)
+
+    monkeypatch.setattr(basal.urllib.request, "urlopen", fake_urlopen)
+    client = basal.HttpBasalClient("http://x", 1.0, "basal-2.0-4.5B@e5ba914", retries=3)
+
+    with pytest.raises(urllib.error.HTTPError):
+        client.decide("msg", CRITERIA, "Pick.")
+    assert len(calls) == 1
 
 
 class _FakeClient:

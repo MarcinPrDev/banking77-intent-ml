@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import time
+import urllib.error
 import urllib.request
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -84,10 +85,11 @@ def parse_decision(payload: dict, criteria: dict[str, str], wall_ms: float) -> B
 class HttpBasalClient:
     """Synchroniczne żądania do `basal-serve`; jedna wiadomość na żądanie (batch = 1)."""
 
-    def __init__(self, url: str, timeout_s: float, expected_model: str):
+    def __init__(self, url: str, timeout_s: float, expected_model: str, retries: int = 0):
         self.url = url.rstrip("/")
         self.timeout_s = timeout_s
         self.expected_model = expected_model
+        self.retries = retries  # tylko zerwane połączenie (np. tunel SSH); błąd HTTP od razu w górę
 
     def health(self) -> dict:
         with urllib.request.urlopen(f"{self.url}/health", timeout=self.timeout_s) as response:
@@ -95,15 +97,24 @@ class HttpBasalClient:
 
     def decide(self, text: str, criteria: dict[str, str], instructions: str) -> BasalDecision:
         body = json.dumps(request_body(text, criteria, instructions)).encode("utf-8")
-        request = urllib.request.Request(
-            f"{self.url}/v1/systemone",
-            data=body,
-            headers={"content-type": "application/json"},
-            method="POST",
-        )
-        start = time.perf_counter()
-        with urllib.request.urlopen(request, timeout=self.timeout_s) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+        for attempt in range(self.retries + 1):
+            request = urllib.request.Request(
+                f"{self.url}/v1/systemone",
+                data=body,
+                headers={"content-type": "application/json"},
+                method="POST",
+            )
+            start = time.perf_counter()  # czas udanej próby, bez przerw na ponowienie
+            try:
+                with urllib.request.urlopen(request, timeout=self.timeout_s) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                break
+            except urllib.error.HTTPError:
+                raise
+            except OSError:
+                if attempt == self.retries:
+                    raise
+                time.sleep(2**attempt)
         decision = parse_decision(payload, criteria, (time.perf_counter() - start) * 1000)
         if decision.model != self.expected_model:
             raise BasalError(
