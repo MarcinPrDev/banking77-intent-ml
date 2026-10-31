@@ -27,6 +27,7 @@ from banking77_intent_ml.evaluation.basal_eval import FAMILY as BASAL_FAMILY
 from banking77_intent_ml.evaluation.basal_eval import TEST_PREDICTIONS_ARTIFACT as BASAL_PREDICTIONS
 from banking77_intent_ml.evaluation.error_analysis import test_artifacts
 from banking77_intent_ml.evaluation.final import PREDICTION_COLUMNS
+from banking77_intent_ml.evaluation.significance import correct_by_model
 from banking77_intent_ml.evaluation.tracking import configure_mlflow
 from banking77_intent_ml.models.factory import STRATEGIES
 
@@ -91,9 +92,39 @@ def reliability_table(confidence: np.ndarray, correct: np.ndarray, n_bins: int) 
     Przedziały równej szerokości na [0, 1], domknięte z prawej: (a, b]; pierwszy [0, 1/n_bins].
     Kolumny: `lower`, `upper`, `n`, `confidence` (średnia pewność), `accuracy` (odsetek trafień),
     `gap` (accuracy − confidence); w pustym przedziale `n` = 0, a średnie i `gap` = NaN.
-    `ValueError`: różne długości, puste dane, NaN, pewność spoza [0, 1], `n_bins` < 1.
+    `ValueError`: dane inne niż wektory tej samej niezerowej długości, wartości nieskończone
+    lub NaN, pewność spoza [0, 1], trafienia inne niż 0/1,
+    `n_bins` inne niż dodatnia liczba całkowita.
     """
-    raise NotImplementedError("TODO-Marcin")
+    if isinstance(n_bins, (bool, np.bool_)) or not isinstance(n_bins, (int, np.integer)):
+        raise ValueError("n_bins musi być dodatnią liczbą całkowitą")
+    if n_bins < 1:
+        raise ValueError("n_bins musi być dodatnią liczbą całkowitą")
+    confidence = np.asarray(confidence, dtype=float)
+    correct = np.asarray(correct, dtype=float)
+    if confidence.ndim != 1 or confidence.shape != correct.shape or confidence.size == 0:
+        raise ValueError("Wymagane niepuste wektory tej samej długości")
+    if not np.isfinite(confidence).all() or not np.isfinite(correct).all():
+        raise ValueError("Pewność i trafienia muszą być skończone, bez NaN")
+    if np.any((confidence < 0) | (confidence > 1)):
+        raise ValueError("Pewność musi należeć do [0, 1]")
+    if not np.isin(correct, [0, 1]).all():
+        raise ValueError("Trafienia muszą mieć wartości 0 albo 1")
+    edges = np.linspace(0, 1, n_bins + 1)
+    # Szukanie w górnych granicach zachowuje (a, b] oraz włącza 0 do pierwszego przedziału.
+    indices = np.searchsorted(edges[1:], confidence, side="left")
+    rows = []
+    for i in range(n_bins):
+        selected = indices == i
+        n = int(selected.sum())
+        mean_confidence = float(confidence[selected].mean()) if n else np.nan
+        accuracy = float(correct[selected].mean()) if n else np.nan
+        rows.append({
+            "lower": edges[i], "upper": edges[i + 1], "n": n,
+            "confidence": mean_confidence, "accuracy": accuracy,
+            "gap": accuracy - mean_confidence,
+        })
+    return pd.DataFrame(rows)
 
 
 def expected_calibration_error(table: pd.DataFrame) -> float:
@@ -101,7 +132,11 @@ def expected_calibration_error(table: pd.DataFrame) -> float:
 
     N = suma `n`; puste przedziały (`n` = 0) nie wnoszą nic. `ValueError`, gdy N = 0.
     """
-    raise NotImplementedError("TODO-Marcin")
+    n = table["n"].sum()
+    if n == 0:
+        raise ValueError("ECE wymaga co najmniej jednej predykcji (N > 0)")
+    nonempty = table.loc[table["n"] > 0]
+    return float(np.sum(nonempty["n"].to_numpy() * np.abs(nonempty["gap"].to_numpy())) / n)
 
 
 def calibration_summary(
@@ -114,7 +149,26 @@ def calibration_summary(
     Każdy model musi mieć `settings.dataset.test.n_rows` wierszy, a wszystkie modele — te same
     `row_id` i `y_true` (jak w `significance.correct_by_model`); inaczej `ValueError`.
     """
-    raise NotImplementedError("TODO-Marcin")
+    correct = correct_by_model({name: item.predictions for name, item in inputs.items()})
+    n = len(correct)
+    expected_n = settings.dataset.test.n_rows
+    if n != expected_n:
+        raise ValueError(f"Predykcje: {n} wierszy, pełny test według configu: {expected_n}")
+    rows = []
+    tables = []
+    for name, item in inputs.items():
+        confidence = item.predictions.set_index("row_id").loc[correct.index, "score"].to_numpy()
+        table = reliability_table(
+            confidence, correct[name].to_numpy(), settings.evaluation.calibration.n_bins
+        )
+        rows.append({
+            "model": name, "n": n, "accuracy": float(correct[name].mean()),
+            "mean_confidence": float(confidence.mean()),
+            "ece": expected_calibration_error(table),
+        })
+        table.insert(0, "model", name)
+        tables.append(table)
+    return pd.DataFrame(rows), pd.concat(tables, ignore_index=True)
 
 
 def plot_reliability(summary: pd.DataFrame, bins: pd.DataFrame, path: Path) -> Path:
