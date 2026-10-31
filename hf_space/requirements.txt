@@ -1,0 +1,4 @@
+transformers==5.13.0
+tokenizers==0.22.2
+safetensors==0.8.0
+streamlit==1.66.1

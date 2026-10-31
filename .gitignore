@@ -49,3 +49,6 @@ CLAUDE.local.md
 .env
 .env.*
 !.env.example
+
+# Space Hugging Face: wagi modelu wysyłane z models/final/distilbert, nie z gita
+/hf_space/model/
