@@ -327,7 +327,7 @@ basal_ultra:
   timeout_s: 60
   retries: 3                               # zerwany tunel: ponowienie żądania (serwer deterministyczny)
   serve_args: --mode eager --template-prefix off --deterministic
-  hardware: ""                             # GPU wynajętej maszyny — wpis przed pierwszym runem
+  hardware: "NVIDIA H100 80GB HBM3 (RunPod Secure, EUR-NO-2; sterownik 595.91.07, CUDA 13.2)"
   models:                                  # rewizja przypięta (Hugging Face, 31.10.2026)
     basal_omni_ultra:
       repo: Remek/basal-omni-1.0-ultra

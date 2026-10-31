@@ -17,10 +17,12 @@ idą tunelem SSH na lokalny port 18090 (`basal_ultra.url`).
 ## 1. Maszyna zdalna
 
 Te same wersje co lokalnie w badaniu 1: Python 3.12, PyTorch 2.11.0 (cu128), `basal` 2.4.1.
+Model trafia na duży dysk (`HF_HOME`), bo dysk systemowy poda bywa mniejszy niż 62,55 GB wag.
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh && source "$HOME/.local/bin/env"
-uv venv --python 3.12 ~/basal && source ~/basal/bin/activate
+command -v uv || { curl -LsSf https://astral.sh/uv/install.sh | sh && source "$HOME/.local/bin/env"; }
+export HF_HOME=/workspace/hf
+uv venv --python 3.12 /root/basal-env && source /root/basal-env/bin/activate
 uv pip install torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
 uv pip install "basal[media] @ https://github.com/rkinas/basal/archive/refs/tags/v2.4.1.tar.gz"
 python -c "import torch; print(torch.cuda.get_device_name(0), torch.cuda.mem_get_info())"
@@ -31,9 +33,14 @@ SNAP=$(hf download Remek/basal-omni-1.0-ultra --revision "$REV" | tail -1)
 
 HF_HUB_OFFLINE=1 nohup basal-serve --model "$SNAP" --name basal-omni-1.0-ultra@6d5ba67 \
   --mode eager --template-prefix off --deterministic --host 127.0.0.1 --port 18090 \
-  > ~/basal-serve.log 2>&1 &
+  > /workspace/basal-serve.log 2>&1 &
 curl -s http://127.0.0.1:18090/health
 ```
+
+Przebieg 31.10.2026: RunPod Secure Cloud, 1× H100 SXM 80 GB (EUR-NO-2, $3,99/h), szablon
+`runpod-torch-v280` (Ubuntu 24.04, Python 3.12.3, `uv` w obrazie), dyski 50 GB + 150 GB
+(`/workspace`), tylko port `22/tcp`; klucz SSH przekazany zmienną `PUBLIC_KEY` poda.
+Odcisk klucza hosta porównany z logiem startu poda przed pierwszym połączeniem.
 
 Serwer nasłuchuje tylko na `127.0.0.1` maszyny — z zewnątrz dostęp jest wyłącznie przez tunel.
 
