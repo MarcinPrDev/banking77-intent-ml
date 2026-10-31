@@ -65,5 +65,6 @@ Repo i pakiet przemianowane 2.10.2026 (wcześniej `us-accidents-ml` / `us_accide
   i archiwum kursu — notatki autora poza repo; ścieżki w `CLAUDE.local.md` (poza gitem).
 - Siostrzany ETL (Spark, CI/CD, Dataproc): https://github.com/MarcinPrDev/us-accidents-etl
 
-**Termin: 31.10.2026 (sobota) — wysyłka ≤ 31.10; 1.11 tylko poprawki po wysyłce.**
+**Termin: 31.10.2026 (sobota) — wysyłka przesunięta na pn 2.11.2026 (decyzja autora 31.10);
+wersja wysyłana = tag `v1.0-submission`, zmiany po nim tylko jako poprawki po wysyłce.**
 Bramka po W1: niedziela 4.10 wieczór (README → *Bramka po W1 i fallback*).
