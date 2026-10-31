@@ -28,7 +28,7 @@ uv pip install "basal[media] @ https://github.com/rkinas/basal/archive/refs/tags
 python -c "import torch; print(torch.cuda.get_device_name(0), torch.cuda.mem_get_info())"
 
 REV=6d5ba67db149e47ddce26fc02d78c0cadb10f496
-SNAP=$(hf download Remek/basal-omni-1.0-ultra --revision "$REV" | tail -1)
+SNAP=$(hf download Remek/basal-omni-1.0-ultra --revision "$REV" --quiet)   # sama ścieżka
 (cd "$SNAP" && sha256sum -c SHA256SUMS)   # sumy plików z repozytorium modelu
 
 HF_HUB_OFFLINE=1 nohup basal-serve --model "$SNAP" --name basal-omni-1.0-ultra@6d5ba67 \
@@ -41,6 +41,10 @@ Przebieg 31.10.2026: RunPod Secure Cloud, 1× H100 SXM 80 GB (EUR-NO-2, $3,99/h)
 `runpod-torch-v280` (Ubuntu 24.04, Python 3.12.3, `uv` w obrazie), dyski 50 GB + 150 GB
 (`/workspace`), tylko port `22/tcp`; klucz SSH przekazany zmienną `PUBLIC_KEY` poda.
 Odcisk klucza hosta porównany z logiem startu poda przed pierwszym połączeniem.
+Wersje na podzie: torch 2.11.0+cu128, transformers 5.17.0, basal 2.4.1, huggingface-hub 1.33.0.
+Pobranie 62 GB: ok. 4 min. `sha256sum -c SHA256SUMS`: 12 plików OK (wagi, config, tokenizer,
+kalibracja, `basal.json`), `README.md` FAILED — karta modelu różni się od sumy z `SHA256SUMS`
+tej samej rewizji (nie wpływa na działanie modelu).
 
 Serwer nasłuchuje tylko na `127.0.0.1` maszyny — z zewnątrz dostęp jest wyłącznie przez tunel.
 
