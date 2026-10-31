@@ -15,6 +15,7 @@ wystarczy `COPY configs/ /app/configs/` + `ENV BANKING77_CONFIG=/app/configs/con
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -211,6 +212,28 @@ class LlmConfig:
 
 
 @dataclass(frozen=True)
+class BasalModelConfig:
+    repo: str  # Hugging Face, np. Remek/basal-2.0-4.5B
+    revision: str  # przypięty commit repozytorium modelu
+    cost_rank: int  # reguła remisu: mniejszy = tańszy
+
+
+@dataclass(frozen=True)
+class BasalConfig:
+    # Dodatek W5 (prerejestracja — decyzje autora 30.10.2026): zero-shot przez `basal-serve`.
+    engine_version: str
+    url: str
+    timeout_s: float
+    models: dict[str, BasalModelConfig]  # kandydat -> model
+    label_variants: dict[str, Path]  # wariant -> JSON {nazwa intencji z mapy: opis}
+    instructions: str  # treść pytania (autor); pusta = skrypt odmawia
+    tie_tolerance: float
+    serve_args: str = ""  # flagi basal-serve użyte w pomiarach (zapisywane w runach)
+    frozen_model: str | None = None
+    frozen_labels: str | None = None
+
+
+@dataclass(frozen=True)
 class MlflowConfig:
     # Pola WYPROWADZONE z `paths`, nie przepisane z YAML (jedno źródło ścieżek; decyzja 6.10.2026):
     # - tracking_uri = `sqlite:///<bezwzględna paths.mlflow_db>` — MLflow 3.14 odrzuca magazyn
@@ -267,6 +290,7 @@ class Settings:
     api: ApiConfig
     deploy: DeployConfig
     ui: UiConfig
+    basal: BasalConfig | None = None  # dodatek W5; brak sekcji w YAML = None
 
 
 def _resolve_config_path(config_path: str | Path | None) -> Path:
@@ -429,4 +453,27 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
             release_sha256=str(raw["deploy"]["release_sha256"]).lower(),
         ),
         ui=UiConfig(api_url=str(raw["ui"]["api_url"])),
+        basal=_basal(raw["basal"], _abs) if raw.get("basal") else None,
+    )
+
+
+def _basal(raw: dict, resolve: Callable[[str], Path]) -> BasalConfig:
+    return BasalConfig(
+        engine_version=str(raw["engine_version"]),
+        url=str(raw["url"]).rstrip("/"),
+        timeout_s=float(raw["timeout_s"]),
+        models={
+            str(name): BasalModelConfig(
+                repo=str(model["repo"]),
+                revision=str(model["revision"]),
+                cost_rank=int(model["cost_rank"]),
+            )
+            for name, model in raw["models"].items()
+        },
+        label_variants={str(name): resolve(path) for name, path in raw["label_variants"].items()},
+        instructions=str(raw["instructions"] or ""),
+        tie_tolerance=float(raw["tie_tolerance"]),
+        serve_args=str(raw.get("serve_args") or ""),
+        frozen_model=raw["frozen_model"],
+        frozen_labels=raw["frozen_labels"],
     )
