@@ -16,7 +16,7 @@ import pytest
 from banking77_intent_ml.config import load_settings
 from banking77_intent_ml.evaluation import calibration
 from banking77_intent_ml.evaluation.basal_eval import TEST_PREDICTIONS_ARTIFACT
-from banking77_intent_ml.evaluation.error_analysis import TestArtifacts
+from banking77_intent_ml.evaluation.error_analysis import TestArtifacts as Artifacts  # bez Test*
 from banking77_intent_ml.evaluation.final import PREDICTION_COLUMNS
 from banking77_intent_ml.evaluation.tracking import configure_mlflow
 from banking77_intent_ml.models.factory import STRATEGIES
@@ -49,7 +49,7 @@ def _predictions(n: int = 4) -> pd.DataFrame:
 def _fake_test_artifacts(settings):
     empty = pd.DataFrame()
     return {
-        name: TestArtifacts(f"run-{name}", empty, empty, _predictions())
+        name: Artifacts(f"run-{name}", empty, empty, _predictions())
         for name in sorted(STRATEGIES)
     }
 
@@ -124,6 +124,27 @@ def test_plot_reliability_writes_png(tmp_path):
     })
     path = calibration.plot_reliability(summary, bins, tmp_path / "fig" / "reliability.png")
     assert path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_run_tables_reads_saved_csv_only_from_calibration_run(tmp_mlflow_settings, tmp_path):
+    summary = pd.DataFrame({"model": ["distilbert"], "n": [4], "ece": [0.05]})
+    bins = pd.DataFrame({"model": ["distilbert"], "lower": [0.0], "upper": [1.0], "n": [4]})
+    summary.to_csv(tmp_path / calibration.SUMMARY_ARTIFACT, index=False)
+    bins.to_csv(tmp_path / calibration.BINS_ARTIFACT, index=False)
+    configure_mlflow(tmp_mlflow_settings)
+    run_ids = {}
+    for key, tags in (("analysis", dict([calibration.ANALYSIS_TAG])), ("other", {})):
+        with mlflow.start_run(tags=tags) as run:
+            mlflow.log_artifact(str(tmp_path / calibration.SUMMARY_ARTIFACT))
+            mlflow.log_artifact(str(tmp_path / calibration.BINS_ARTIFACT))
+        run_ids[key] = run.info.run_id
+
+    loaded_summary, loaded_bins = calibration.run_tables(tmp_mlflow_settings, run_ids["analysis"])
+
+    pd.testing.assert_frame_equal(loaded_summary, summary)
+    pd.testing.assert_frame_equal(loaded_bins, bins)
+    with pytest.raises(ValueError, match="analysis=calibration"):
+        calibration.run_tables(tmp_mlflow_settings, run_ids["other"])
 
 
 # --- obliczenia (autor) ---

@@ -32,6 +32,9 @@ from banking77_intent_ml.evaluation.tracking import configure_mlflow
 from banking77_intent_ml.models.factory import STRATEGIES
 
 BASAL_COLUMNS = {"true_id": "y_true", "predicted_id": "y_pred"}  # predictions_basal_test.csv
+ANALYSIS_TAG = ("analysis", "calibration")  # run analizy (nie `split=test`)
+SUMMARY_ARTIFACT = "calibration_summary.csv"
+BINS_ARTIFACT = "calibration_bins.csv"
 DISPLAY_NAMES = {
     "distilbert": "DistilBERT",
     "tfidf_lr": "TF-IDF + LR",
@@ -171,12 +174,28 @@ def calibration_summary(
     return pd.DataFrame(rows), pd.concat(tables, ignore_index=True)
 
 
+def run_tables(settings: Settings, run_id: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(podsumowanie, przedziały) zapisane w runie `analysis=calibration` — do ponownego wykresu.
+
+    Tylko odczyt artefaktów CSV, bez obliczeń na predykcjach; run bez tego tagu → `ValueError`.
+    """
+    configure_mlflow(settings)
+    if mlflow.get_run(run_id).data.tags.get(ANALYSIS_TAG[0]) != ANALYSIS_TAG[1]:
+        raise ValueError(f"Run {run_id} nie ma tagu {ANALYSIS_TAG[0]}={ANALYSIS_TAG[1]}")
+    summary, bins = (
+        pd.read_csv(mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path=name))
+        for name in (SUMMARY_ARTIFACT, BINS_ARTIFACT)
+    )
+    return summary, bins
+
+
 def plot_reliability(summary: pd.DataFrame, bins: pd.DataFrame, path: Path) -> Path:
     """Wykres niezawodności: kolumna na model, w kolejności `summary`; zapis PNG do `path`.
 
-    Góra: accuracy w niepustych przedziałach (słupki na szerokość przedziału), luka do średniej
-    pewności (kreskowanie) i przekątna idealnej kalibracji; w tytule ECE i N. Dół: liczba
-    predykcji w przedziałach (skala log). Tylko liczby z tabel — bez tekstów testu.
+    Góra: accuracy w niepustych przedziałach (słupki na szerokość przedziału), średnia pewność
+    w przedziale (czerwona kreska — nad słupkiem: pewność zawyżona, poniżej jego szczytu:
+    zaniżona) i przekątna idealnej kalibracji; w tytule ECE i N. Dół: liczba predykcji
+    w przedziałach (skala log). Tylko liczby z tabel — bez tekstów testu.
     """
     import matplotlib
 
@@ -194,11 +213,11 @@ def plot_reliability(summary: pd.DataFrame, bins: pd.DataFrame, path: Path) -> P
         width = table["upper"] - table["lower"]
         top, bottom = axes[0, column], axes[1, column]
         top.bar(table["lower"], table["accuracy"], width=width, align="edge",
-                color="tab:blue", edgecolor="white", label="accuracy")
-        top.bar(table["lower"], table["confidence"] - table["accuracy"], width=width,
-                bottom=table["accuracy"], align="edge", color="tab:red", alpha=0.25,
-                hatch="//", edgecolor="tab:red", label="luka do pewności")
-        top.plot([0, 1], [0, 1], linestyle="--", color="gray", linewidth=1)
+                color="tab:blue", alpha=0.75, edgecolor="white", label="accuracy w przedziale")
+        top.hlines(table["confidence"], table["lower"], table["upper"], colors="tab:red",
+                   linewidth=2.5, label="średnia pewność w przedziale")
+        top.plot([0, 1], [0, 1], linestyle="--", color="gray", linewidth=1,
+                 label="idealna kalibracja")
         top.set_xlim(0, 1)
         top.set_ylim(0, 1)
         top.set_title(f"{DISPLAY_NAMES.get(model, model)}\nECE {row['ece']:.4f}, N {int(row['n'])}")
