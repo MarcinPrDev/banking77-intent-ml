@@ -988,10 +988,15 @@ lokalnych. Ekspozycja modelu na benchmark nieustalona — wynik nie dowodzi gene
 
 ### Basal zero-shot — dodatek z 30–31.10
 
-Skąd ten dodatek: pod koniec października 2026 r. o Basalu było w Polsce głośno
-w związku z jego wynikami w rankingach. To polski model decyzyjny (Remigiusz Kinas;
-wersja 4,5B dostrojona z `speakleash/Bielik-4.5B-v3.0-Instruct` według NOTICE pakietu):
-wybiera jedną z podanych opcji i zwraca rozkład prawdopodobieństw.
+Skąd ten dodatek: w drugiej połowie października 2026 r. o Basalu było w Polsce głośno po rankingu
+JevBench (v1.6.28, 17.10.2026), który ocenia trafność i kalibrację decyzji, nie pisanie tekstu.
+Wariant `basal-omni-1.0-ultra` znalazł się tam w czołówce modeli z otwartymi wagami: według
+doniesień od 1. do 4. miejsca, zależnie od zestawienia
+([ITwiz, 21.10.2026](https://itwiz.pl/polski-model-ai-wyprzedzil-rozwiazania-openai-i-microsoftu/),
+[Bezprawnik, 25.10.2026](https://bezprawnik.pl/basal-ai/)). Testowany tu model 4,5B to inny wariant.
+Basal to polski model decyzyjny (Remigiusz Kinas; wersja 4,5B dostrojona z
+`speakleash/Bielik-4.5B-v3.0-Instruct` według NOTICE pakietu): wybiera jedną z podanych opcji
+i zwraca rozkład prawdopodobieństw.
 Klasyfikacja intencji ma właśnie taki kształt, więc Basal nadawał się do sprawdzenia bez dostrajania.
 Dodatek jest hobbystyczny i wykracza poza wymagania zaliczenia: powstał z ciekawości,
 żeby sprawdzić nowy model w praktyce i dowiedzieć się jak najwięcej.
@@ -1054,7 +1059,8 @@ niższej jakości i kosztu predykcji na GPU. Wniosek dotyczy modelu 4,5B z opisa
 `eager`, nie całej rodziny Basal ani najlepszego możliwego czasu tego silnika.
 
 Na 385 wiadomościach Basal trafił 303 razy, a LLM 311 — różnica 8 odpowiedzi.
-Na walidacji Basal miał wyższe accuracy, ale niższe macro-F1 niż LLM v2.
+Na walidacji Basal miał wyższe accuracy (o jedną wiadomość: 314 wobec 313),
+ale niższe macro-F1 niż LLM v2.
 Nie rozstrzygam trwałej przewagi jednej z tych ścieżek. Testu istotności dla tej pary
 nie było w prerejestracji i nie został wykonany.
 
