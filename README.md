@@ -988,6 +988,14 @@ lokalnych. Ekspozycja modelu na benchmark nieustalona — wynik nie dowodzi gene
 
 ### Basal zero-shot — dodatek z 30–31.10
 
+Skąd ten dodatek: pod koniec października 2026 r. o Basalu było w Polsce głośno
+w związku z jego wynikami w rankingach. To polski model decyzyjny (Remigiusz Kinas;
+wersja 4,5B dostrojona z `speakleash/Bielik-4.5B-v3.0-Instruct` według NOTICE pakietu):
+wybiera jedną z podanych opcji i zwraca rozkład prawdopodobieństw.
+Klasyfikacja intencji ma właśnie taki kształt, więc Basal nadawał się do sprawdzenia bez dostrajania.
+Dodatek jest hobbystyczny i wykracza poza wymagania zaliczenia: powstał z ciekawości,
+żeby sprawdzić nowy model w praktyce i dowiedzieć się jak najwięcej.
+
 Rozszerzenie po głównym badaniu, bez zmiany wybranego modelu do wdrożenia.
 Prerejestracja: `9360375`, infrastruktura: `3e054ef`, instrukcja i opisy v2: `5c6797f`.
 Plan obejmował dwa modele i dwa warianty opisów. Model 11B FP8 odpadł technicznie:
@@ -1184,6 +1192,13 @@ Dodatkowo (27.10):
   Osobne części do kalibracji, wyboru progu przekazania człowiekowi i końcowej oceny.
   Ocena wykresem kalibracji i ECE; bez użycia obecnego testu ani dawnej walidacji z refitu.
   Sama kalibracja nie zastępuje sprawdzenia OOD.
+
+Dodatkowo (31.10):
+
+- Kolejne modele Basal: nowe wersje modeli i silnika ukazują się na bieżąco, a NOTICE pakietu
+  2.4.1 wymienia też warianty `mini` i `omni`. Ten sam protokół: wybór wariantu na walidacji 385,
+  jeden przebieg testu dla zamrożonego wyboru. Także 11B FP8 — na GPU, na którym zmieszczą się
+  tryby z grafami CUDA.
 
 ## Historia decyzji
 
