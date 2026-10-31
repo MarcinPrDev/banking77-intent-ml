@@ -229,6 +229,8 @@ class BasalConfig:
     instructions: str  # treść pytania (autor); pusta = skrypt odmawia
     tie_tolerance: float
     serve_args: str = ""  # flagi basal-serve użyte w pomiarach (zapisywane w runach)
+    hardware: str = ""  # GPU serwera, gdy inny niż lokalny RTX 5080 (zapisywany w runach)
+    retries: int = 0  # ponowienia żądania po zerwanym połączeniu (tunel SSH), nie po błędzie HTTP
     frozen_model: str | None = None
     frozen_labels: str | None = None
 
@@ -291,6 +293,7 @@ class Settings:
     deploy: DeployConfig
     ui: UiConfig
     basal: BasalConfig | None = None  # dodatek W5; brak sekcji w YAML = None
+    basal_ultra: BasalConfig | None = None  # dodatek W5, badanie 2 (31.10): basal-omni-1.0-ultra
 
 
 def _resolve_config_path(config_path: str | Path | None) -> Path:
@@ -454,6 +457,7 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         ),
         ui=UiConfig(api_url=str(raw["ui"]["api_url"])),
         basal=_basal(raw["basal"], _abs) if raw.get("basal") else None,
+        basal_ultra=_basal(raw["basal_ultra"], _abs) if raw.get("basal_ultra") else None,
     )
 
 
@@ -474,6 +478,8 @@ def _basal(raw: dict, resolve: Callable[[str], Path]) -> BasalConfig:
         instructions=str(raw["instructions"] or ""),
         tie_tolerance=float(raw["tie_tolerance"]),
         serve_args=str(raw.get("serve_args") or ""),
+        hardware=str(raw.get("hardware") or ""),
+        retries=int(raw.get("retries") or 0),
         frozen_model=raw["frozen_model"],
         frozen_labels=raw["frozen_labels"],
     )

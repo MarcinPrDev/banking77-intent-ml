@@ -993,7 +993,8 @@ JevBench (v1.6.28, 17.10.2026), który ocenia trafność i kalibrację decyzji, 
 Wariant `basal-omni-1.0-ultra` znalazł się tam w czołówce modeli z otwartymi wagami: według
 doniesień od 1. do 4. miejsca, zależnie od zestawienia
 ([ITwiz, 21.10.2026](https://itwiz.pl/polski-model-ai-wyprzedzil-rozwiazania-openai-i-microsoftu/),
-[Bezprawnik, 25.10.2026](https://bezprawnik.pl/basal-ai/)). Testowany tu model 4,5B to inny wariant.
+[Bezprawnik, 25.10.2026](https://bezprawnik.pl/basal-ai/)). Badanie 1 dotyczy modelu 4,5B
+(inny wariant), badanie 2 — właśnie wariantu ultra.
 Basal to polski model decyzyjny (Remigiusz Kinas; wersja 4,5B dostrojona z
 `speakleash/Bielik-4.5B-v3.0-Instruct` według NOTICE pakietu): wybiera jedną z podanych opcji
 i zwraca rozkład prawdopodobieństw.
@@ -1002,6 +1003,9 @@ Dodatek jest hobbystyczny i wykracza poza wymagania zaliczenia: powstał z cieka
 żeby sprawdzić nowy model w praktyce i dowiedzieć się jak najwięcej.
 
 Rozszerzenie po głównym badaniu, bez zmiany wybranego modelu do wdrożenia.
+
+#### Basal 4,5B — badanie 1, 30–31.10
+
 Prerejestracja: `9360375`, infrastruktura: `3e054ef`, instrukcja i opisy v2: `5c6797f`.
 Plan obejmował dwa modele i dwa warianty opisów. Model 11B FP8 odpadł technicznie:
 w tym środowisku Windows tryby z grafami CUDA nie zmieściłyby się w 16 GB lub wymagałyby
@@ -1029,7 +1033,7 @@ Każdy wariant oceniony raz. Wybór według macro-F1; różnica od najlepszego w
 
 Opisy v2 poprawiły macro-F1 o 0,0645, przy wyższej latencji. Zwyciężyła jakość, reguła remisu
 nie zadziałała. Na tej samej walidacji LLM v2 miał macro-F1 0,8147 (`081d183e`), a LLM v1
-0,7971 (`526e5400`). Wynik Basal v2 jest bliski LLM v2, ale dotyczy to tylko walidacji.
+0,7971 (`526e5400`). Wynik Basal 4,5B v2 jest bliski LLM v2, ale dotyczy to tylko walidacji.
 
 Pomiar na RTX 5080, tryb `eager`, `--template-prefix off --deterministic`, batch=1.
 p50 to `latency_wall_p50_ms`: czas po stronie klienta, z lokalnym HTTP.
@@ -1046,27 +1050,67 @@ i tabele per klasa. Czas około 57 min; p50 żądania HTTP 1 089,8 ms, p95 1 144
 | DistilBERT | 0,9302 | 0,9305 | 0,9195 | 0,9202 |
 | MiniLM + kNN | 0,9205 | 0,9203 | 0,9169 | 0,9157 |
 | TF-IDF + LR | 0,9081 | 0,9083 | 0,9117 | 0,9112 |
+| Basal ultra v2 (zero-shot) | 0,8481 | 0,8441 | 0,8286 | 0,8107 |
 | LLM v2 (zero-shot) | — | — | 0,8078 | 0,7967 |
 | Basal 4,5B v2 (zero-shot) | 0,8039 | 0,7966 | 0,7870 | 0,7787 |
 
-Źródło: metryki `test_*` i `llm385_*` w MLflow. Basal: `8cdd3c0f`, DistilBERT: `fb0d0bde`,
-MiniLM+kNN: `04ec980a`, TF-IDF+LR: `0c08edb4`, LLM: `219ab1e3`.
+Źródło: metryki `test_*` i `llm385_*` w MLflow. Basal 4,5B: `8cdd3c0f`, DistilBERT: `fb0d0bde`,
+MiniLM+kNN: `04ec980a`, TF-IDF+LR: `0c08edb4`, LLM: `219ab1e3`, Basal ultra: `b855251a`.
 LLM oceniony tylko na 385 wiadomościach; porównania w tej części dotyczą tych samych wierszy.
 
-Basal uzyskał niższe accuracy i macro-F1 niż wszystkie trzy modele uczone na BANKING77,
+Basal 4,5B uzyskał niższe accuracy i macro-F1 niż wszystkie trzy modele uczone na BANKING77,
 zarówno na 3 080, jak i na 385 zdaniach. W tym badaniu brak dostrajania nie zrekompensował
 niższej jakości i kosztu predykcji na GPU. Wniosek dotyczy modelu 4,5B z opisami v2 w trybie
 `eager`, nie całej rodziny Basal ani najlepszego możliwego czasu tego silnika.
 
-Na 385 wiadomościach Basal trafił 303 razy, a LLM 311 — różnica 8 odpowiedzi.
-Na walidacji Basal miał wyższe accuracy (o jedną wiadomość: 314 wobec 313),
+Na 385 wiadomościach Basal 4,5B trafił 303 razy, a LLM 311 — różnica 8 odpowiedzi.
+Na walidacji Basal 4,5B miał wyższe accuracy (o jedną wiadomość: 314 wobec 313),
 ale niższe macro-F1 niż LLM v2.
 Nie rozstrzygam trwałej przewagi jednej z tych ścieżek. Testu istotności dla tej pary
 nie było w prerejestracji i nie został wykonany.
 
-Macro-F1 Basala spadło z 0,8080 na walidacji (385) do 0,7966 na pełnym teście (3 080)
+Macro-F1 Basala 4,5B spadło z 0,8080 na walidacji (385) do 0,7966 na pełnym teście (3 080)
 i 0,7787 na podzbiorze testowym (385). To różne próbki; sam spadek nie dowodzi przeuczenia
 opisów. Pokazuje ograniczenie przenoszenia wyniku z małej walidacji na test.
+
+#### Basal ultra — badanie 2, 31.10
+
+Osobna prerejestracja `9f36a77`, przed obliczeniami. Model `Remek/basal-omni-1.0-ultra`
+(31B), rewizja `6d5ba67`, na wynajętej karcie H100 80 GB w RunPod.
+Te same instrukcje, opisy v1/v2 i próbka walidacji 385 zdań co dla 4,5B; zgodność skrótów
+zapisana w MLflow. Bez dostrajania wag w projekcie; wcześniejsza ekspozycja na BANKING77
+pozostaje nieustalona. Szczegóły środowiska i przebiegu: [notatka](docs/basal-ultra.md).
+
+| Ultra | Macro-F1 (walidacja 385) | Accuracy (walidacja 385) | Run MLflow |
+|---|---:|---:|---|
+| v2 | 0,8562 | 0,8597 | `b8944d95` |
+| v1 | 0,7896 | 0,7948 | `c6e90ce6` |
+
+Wybrany v2 według tej samej reguły macro-F1; remis nie wystąpił. Wpis frozen `aad7425`
+przed jedynym testem, run `b855251a`. Wyniki na 3 080 i 385 zdaniach w tabeli powyżej.
+
+Ultra trafiła 2 612 z 3 080 wiadomości, o 136 więcej niż 4,5B (2 476).
+Nadal niższe accuracy i macro-F1 niż wszystkie trzy modele uczone na BANKING77.
+Na tych samych 385 zdaniach: ultra 319 trafień, LLM v2 311, Basal 4,5B 303,
+a modele uczone 351–354. Ultra uzyskała tu najwyższe wyniki spośród badanych ścieżek
+zero-shot. To wynik tej próbki, nie dowód trwałej przewagi nad LLM.
+Dla porównań z Basalem nie zaplanowano z góry ani nie wykonano testów istotności.
+
+Macro-F1 ultra spadło z 0,8562 na walidacji (385) do 0,8441 na pełnym teście (3 080)
+i 0,8107 na podzbiorze testowym (385). Tak jak dla 4,5B, różne próbki nie pozwalają
+przypisać samego spadku przeuczeniu opisów.
+
+Test: p50/p95 po stronie serwera 716/722 ms, po stronie klienta 952/978 ms.
+Czas klienta obejmuje tunel SSH do Norwegii. Także czas serwera nie daje porównania
+szybkości samych modeli: ultra działała na H100, a 4,5B na RTX 5080.
+Oba badania w trybie `eager`, zgodnie z protokołem. Nie mierzono ultra z grafami CUDA;
+716 ms nie należy traktować jako najlepszego możliwego czasu silnika na H100.
+
+Koszt z rozliczeń RunPod: 9,90 USD, w tym GPU 9,83 USD i dyski 0,07 USD.
+Pod działał około 2 h 28 min, w tym około 1 h 18 min oczekiwania na wpis frozen.
+Kwota obejmuje przygotowanie, walidację, oczekiwanie i test. Sam test trwał 48 min,
+czyli około 3,2 USD za GPU według stawki 3,99 USD/h — to szacunek, nie osobna pozycja rachunku.
+Pod usunięty po teście, tunel zamknięty.
 
 ## Analiza błędów (W3)
 
@@ -1201,10 +1245,10 @@ Dodatkowo (27.10):
 
 Dodatkowo (31.10):
 
-- Kolejne modele Basal: nowe wersje modeli i silnika ukazują się na bieżąco, a NOTICE pakietu
-  2.4.1 wymienia też warianty `mini` i `omni`. Ten sam protokół: wybór wariantu na walidacji 385,
-  jeden przebieg testu dla zamrożonego wyboru. Także 11B FP8 — na GPU, na którym zmieszczą się
-  tryby z grafami CUDA.
+- Kolejne modele Basal: niebadane warianty, np. `mini`, oraz 11B FP8. Wariant
+  `basal-omni-1.0-ultra` został już oceniony w badaniu 2. Ten sam protokół: wybór wariantu
+  na walidacji 385, jeden przebieg testu dla zamrożonego wyboru. Dla 11B FP8 potrzebne GPU,
+  na którym zmieszczą się tryby z grafami CUDA.
 
 ## Historia decyzji
 
