@@ -605,7 +605,8 @@ Dane to **~1 MB** (13 083 krótkich zdań; mediana 10 słów w train i 9 w test,
 Każdy krok — wczytanie, TF-IDF, embeddingi, nawet fine-tuning — mieści się w pamięci jednej maszyny;
 Spark ETL dodałby infrastrukturę bez uzasadnienia w objętości danych („big data w chmurze" — Spark
 ETL, Dataproc, CI/CD — zrealizowano w siostrzanym repo
-[us-accidents-etl](https://github.com/MarcinPrDev/us-accidents-etl)).
+[us-accidents-etl](https://github.com/MarcinPrDev/us-accidents-etl); to repo jest prywatne —
+ćwiczenie z kursu wzorowane na materiałach prowadzącego, dostęp na prośbę).
 Zadanie jest czysto tekstowe — CV nie ma tu sensownego zastosowania. Zakres powtórki
 kursu: Python, klasyczne ML, OOP/testy, eksperymenty (MLflow), DL/NLP (transformery), API,
 Docker, Kubernetes, CI/CD; LLM jako stretch.
