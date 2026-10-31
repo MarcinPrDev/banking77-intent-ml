@@ -16,6 +16,11 @@ na benchmarku [BANKING77](https://github.com/PolyAI-LDN/task-specific-datasets) 
 > identyfikator intencji (`card_arrival`). **Czego nie robi:** nie rozwiązuje sprawy klienta,
 > nie ocenia ryzyka, nie wykrywa intencji spoza 77 klas (test nie waliduje OOD).
 
+![Demo: UI Streamlit nad API z modelem distilbert-v1 — dwie wiadomości i zwrócone intencje](docs/figures/demo-ui.gif)
+
+*Demo z 31.10.2026: UI Streamlit (stretch 3) nad lokalnym API z modelem `distilbert-v1`.
+Zdania kontrolne z `configs/smoke_cases.json`, spoza zbioru BANKING77; szczegóły w [Demo](#demo).*
+
 **Pytanie badawcze:** czy dostrajany mały transformer (DistilBERT) poprawia jakość klasyfikacji
 względem TF-IDF + regresji logistycznej i zamrożonych embeddingów + kNN **na tyle, żeby uzasadnić
 większy koszt uczenia i predykcji na CPU**? Wynikiem projektu jest uzasadniony wybór jednego modelu
