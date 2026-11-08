@@ -7,10 +7,8 @@ Projekt końcowy kursu **AI & ML Engineering** (SAGES/Kodołamacz, gr. 06.12.202
 Klasyfikacja intencji pojedynczej wiadomości klienta banku do jednej z **77 kategorii**
 na benchmarku [BANKING77](https://github.com/PolyAI-LDN/task-specific-datasets) (PolyAI, 2020).
 
-> **Zmiana tematu 30.09.2026.** Do 29.09 projekt dotyczył predykcji `Severity` na US Accidents.
-> Powody i liczby z audytu: sekcja *Historia decyzji* i `docs/adr/0001-zmiana-tematu-na-banking77.md`.
-> Repo i pakiet przemianowano 2.10.2026 (wcześniej `us-accidents-ml` / `us_accidents_ml`) — zapis
-> w `docs/RENAME.md`; stare adresy GitHuba przekierowują.
+> Historia projektu — zmiana tematu 30.09.2026, zmiana nazwy repo 2.10, plan 5 slotów, przebieg i księga
+> godzin: [docs/HISTORIA.md](docs/HISTORIA.md) i [docs/STATUS.md](docs/STATUS.md).
 
 > **Co system robi:** dostaje angielską wiadomość („I still haven't received my card"), zwraca
 > identyfikator intencji (`card_arrival`). **Czego nie robi:** nie rozwiązuje sprawy klienta,
@@ -54,8 +52,9 @@ wyboru ani dowodem opłacalności w rzeczywistym banku.
   · [Wdrożenie](#wdrożenie)
 - **Projekt:** [Architektura](#architektura-wzorce-i-solid) · [Przepływ artefaktów modelu](#przepływ-artefaktów-modelu)
   · [Wymagania projektu końcowego](#wymagania-projektu-końcowego--gdzie-są-spełnione)
-  · [Dlaczego bez Sparka i CV](#dlaczego-bez-sparka-i-cv) · [Status i księga godzin](#status)
-  · [Plan](#plan--5-slotów-60-h-3009--31102026) · [Historia decyzji](#historia-decyzji)
+  · [Dlaczego bez Sparka i CV](#dlaczego-bez-sparka-i-cv)
+- **Przebieg projektu (poza raportem):** [docs/STATUS.md](docs/STATUS.md) — plan 5 slotów, bramka po W1,
+  minimum vs stretch, status i księga godzin · [docs/HISTORIA.md](docs/HISTORIA.md) — zmiana tematu, ADR-y
   · [Tooling](#tooling--współpraca-z-ai) · [Licencja](#licencja)
 
 ## Dane
@@ -236,7 +235,7 @@ splitu niesie tylko hash, więc w CI trzeba odtworzyć podział `make_splits` i 
 z manifestem — albo refitować na całych 10 003 bez podziału) — odrzucone, bo tworzy nowy
 artefakt; (c) GCS (tylko jeśli GCP wejdzie jako stretch) — odrzucone. W4 implementuje (a).
 Wybrany DistilBERT wymaga torcha CPU w obrazie — rozmiar 3,18 GB (W3); budowa od zera w CI
-98 s (run `deploy-kind` na PR #1, 18.10 — *Status*, W4). Po feedbacku prowadzącego (8.11.2026)
+98 s (run `deploy-kind` na PR #1, 18.10 — [Status](docs/STATUS.md), W4). Po feedbacku prowadzącego (8.11.2026)
 zależności treningu i analizy wydzielono z obrazu serwującego — zob. *Wdrożenie: Docker*.
 
 **Release `distilbert-v1` (18.10):**
@@ -349,28 +348,8 @@ Ten sam przebieg w GitHub Actions: `.github/workflows/deploy-kind.yaml` (push na
 request, ręcznie) — pierwszy zielony run na `main`:
 [39138227351](https://github.com/MarcinPrDev/banking77-intent-ml/actions/runs/39138227351).
 
-**GKE Autopilot (stretch, płatne; projekt GCP z billingiem, gcloud z `gke-gcloud-auth-plugin`)**
-— ten sam obraz i te same manifesty; obraz z Artifact Registry przypięty digestem i podmieniany
-w locie (`k8s/deployment.yaml` bez zmian), test przez port-forward, bez publicznego adresu.
-`<PROJECT>` / `<NUMER>` = ID i numer projektu GCP, `<DIGEST>` = digest z `docker push`:
-
-```bash
-gcloud services enable container.googleapis.com artifactregistry.googleapis.com
-gcloud artifacts repositories create banking77 --repository-format=docker --location=europe-central2
-gcloud auth configure-docker europe-central2-docker.pkg.dev
-docker tag banking77-intent-api:distilbert-v1 europe-central2-docker.pkg.dev/<PROJECT>/banking77/banking77-intent-api:distilbert-v1
-docker push europe-central2-docker.pkg.dev/<PROJECT>/banking77/banking77-intent-api:distilbert-v1
-# tylko gdy konto usługi węzłów nie ma ról w projekcie (u nas: nowy projekt, zero ról)
-gcloud artifacts repositories add-iam-policy-binding banking77 --location=europe-central2 --member=serviceAccount:<NUMER>-compute@developer.gserviceaccount.com --role=roles/artifactregistry.reader
-gcloud container clusters create-auto banking77-gke --region=europe-central2
-kubectl apply -f k8s/service.yaml
-kubectl set image --local -f k8s/deployment.yaml api=europe-central2-docker.pkg.dev/<PROJECT>/banking77/banking77-intent-api@<DIGEST> -o yaml | kubectl apply -f -
-kubectl rollout status deployment/banking77-intent-api --timeout=540s
-kubectl port-forward svc/banking77-intent-api 18082:8000   # zostaw działające
-uv run python scripts/smoke_api.py --url http://localhost:18082 --timeout 120   # drugi terminal
-gcloud container clusters delete banking77-gke --region=europe-central2
-gcloud artifacts repositories delete banking77 --location=europe-central2
-```
+**GKE Autopilot (stretch, płatne, wykonane raz 22.10):** ten sam obraz i te same manifesty; komendy,
+przebieg i koszt — [docs/GKE.md](docs/GKE.md).
 
 ## Demo
 
@@ -473,84 +452,6 @@ API): `llm_zero_shot.py --stage val --prompt v1`, `--prompt v2`, potem `--stage 
 `llm.frozen_prompt` z configu. Blokady jak wyżej: każdy wariant raz na walidacji, test raz w
 magazynie; odpowiedzi w cache `dane/cache/llm` (przerwany przebieg bez ponownego kosztu).
 
-## Plan — 5 slotów, 60 h (30.09 → 31.10.2026)
-
-*Plan z 30.09.2026; przebieg faktyczny i księga godzin — [Status](#status).*
-
-Podział pracy: dane/protokół/EDA **10 h** · modele/HPO **12 h** · ewaluacja i analiza błędów **6 h**
-· pakiet/API/testy **8 h** · Docker/kind/CI **9 h** · raport/demo **7 h** · rezerwa **8 h**.
-Godziny slotu obejmują weekend i wieczory danego tygodnia — od 5.10.2026 każdy wieczór pn–pt
-(także piątek) jest roboczy (~1–1,5 h, jedno małe zadanie; rozkład dzienny w playbookach slotów
-i w kalendarzu), a godziny ponad budżet slotu idą do księgi rezerwy. Nazwy slotów W1–W5 są
-używane przez skille (`/start-etapu Wn`) i kalendarz.
-
-| Slot | Termin | h | Wymagany rezultat (definicja „done") |
-|---|---|---:|---|
-| **W1** | pt 2.10 (wieczór) + **3–4.10** | 12 | dane pobrane i zweryfikowane; krótka EDA + audyt jakości (duplikaty, konflikty, długości, PII); mapa etykiet; **zamrożona walidacja** (grupowany, stratyfikowany split + manifest); TF-IDF baseline w MLflow; predykcje przeżywają zapis/odczyt; krótki test uruchomienia DistilBERT na GPU |
-| **W2** | **10–11.10** | 14 | trzy ścieżki (TF-IDF+LR, MiniLM+kNN, DistilBERT) z ograniczonym HPO na walidacji; pierwsze pomiary CPU (latencja, rozmiar); szkic interfejsu predyktora + Factory; **FastAPI z baseline'em** (`/predict`, `/health`, wersja modelu) |
-| **W3** | **17–18.10** | 14 | **zamrożenie eksperymentów**; ocena końcowa na teście + podzbiór 3 055; analiza błędów; wybrany artefakt wersjonowany; testy jednostkowe (mapa etykiet, walidacja wejścia, zapis→odczyt, kontrakt API); Dockerfile (obraz CPU). **Bez nowych rodzin modeli** |
-| **W4** | nd **18.10** + wieczory **19–22.10** (23–25.10 bez pracy) | 14 | **kind + automatyczny workflow** (build → load → Deployment/Service → test HTTP) w GitHub Actions; próba odtworzenia projektu z instrukcji na czystym klonie; wykorzystanie rezerwy; stretch po rdzeniu, do 22.10 |
-| **W5** | **31.10 (sobota)** | 6 | raport (README z wynikami i wnioskami), demo, kontrola reprodukowalności, **oddanie**. Bez nowych funkcji |
-| | **Razem** | **60** | **Wdrożenie działa przed ostatnim dniem; 1.11 tylko poprawki po wysyłce** |
-
-**Księga godzin:** 60 h = 52 h pracy + 8 h rezerwy. Rezerwa leży w W4 (ogony W1–W3, próba
-odtworzenia, debug workflow). Wieczory 26–30.10 (test obrony, gitleaks, wnioski — do 4,5 h) są
-**poza** 60 h: pokrywa je niewykorzystana rezerwa albo świadome nadgodziny. Wieczory
-30.09–1.10 pochłonęła decyzja o zmianie tematu (research + weryfikacje) — poza budżetem W1.
-Stan rezerwy: wiersz w *Status*, aktualizowany na koniec każdego slotu.
-
-**Dokumentacja przyrostowo:** koniec slotu = aktualizacja *Status* w README + wiersz w tabeli
-wyników (accuracy, macro-F1, koszt) + 1–2 zdania „co nie zadziałało". ADR-y (`docs/adr/`, MADR)
-pisane w momencie decyzji.
-
-## Minimum vs stretch
-
-*Stan na 29.10: minimum zrealizowane; stretch — seedy, LLM zero-shot, UI i GKE — zrobione w W4
-(szczegóły w [Status](#status)).*
-
-**MINIMUM (zalicza rubrykę):** EDA z audytem jakości · przypięte dane + zamrożony protokół ·
-Dummy / TF-IDF+LR / MiniLM+kNN / DistilBERT z ograniczonym HPO w MLflow · porównanie jakości
-i kosztu · analiza błędów · pakiet OOP (Strategy/Factory/pipeline'y) + pytest · FastAPI ·
-Docker (CPU) · **kind z automatycznym deployem i testem HTTP w CI** · README z wnioskami
-i instrukcją odtworzenia.
-
-**STRETCH — w tej kolejności, dopiero po domknięciu minimum:**
-1. dodatkowe seedy zamrożonej konfiguracji DistilBERT, mierzone **na walidacji** (rozrzut
-   zamiast jednej liczby; test nietknięty — decyzja autora 18.10);
-2. **LLM zero-shot (wariant A)** — Groq przez LiteLLM na 385 wiadomościach, protokół jak wyżej;
-3. prosty UI (Streamlit) nad API;
-4. GCP: GKE tym samym obrazem (klaster żyje godziny), Artifact Registry.
-
-Rezerwa 8 h **nie jest** z góry budżetem na stretch.
-
-**Plan stretchu (decyzja autora 18.10):** wszystkie cztery punkty w tej kolejności, każdy po
-rdzeniu danego wieczoru W4, z granicą w czwartek 22.10 (W5 bez nowych funkcji; pt–nd 23–25.10
-bez pracy). Co nie zdąży, zostaje opisane w README jako niezrobione.
-
-## Bramka po W1 i fallback
-
-*Wynik: bramka niezaliczona 4.10, zielona przy powtórce 9.10; fallback LinearSVC niepotrzebny
-(DistilBERT działał na GPU od W1).*
-
-**Bramka (powtórka: piątek 9.10, pierwotnie niedziela 4.10) — kontynuujemy, jeśli:** dane i grupowany podział są
-odtwarzalne (fetch → make_splits → identyczny manifest), baseline uczy się sensownie ponad Dummy
-na tej samej walidacji, predykcje przeżywają zapis/odczyt, i wiadomo, gdzie pójdzie czas wdrożenia.
-**Nie uzależniamy decyzji od 92%.** Jeśli po 3–4 h diagnostyki baseline nie działa → naprawić
-loader / mapę etykiet / pipeline **przed** kolejnymi modelami. Problemy GPU mają osobny timebox
-i nie blokują ścieżek CPU.
-
-**Stan na 9.10:** warunki techniczne są spełnione — dane i zamrożony podział są odtwarzalne,
-TF-IDF+LR osiąga 84,39% accuracy wobec 1,87% Dummy `most_frequent` na walidacji, a zapis i odczyt
-modelu zachowują identyczne predykcje. **Decyzja autora (pt 9.10): kontynuujemy — W2 od 10.10.**
-Czas wdrożenia: autor ocenia plan W2–W4 jako wykonalny przy większym dziennym wymiarze pracy;
-godziny ponad plan slotów trafiają do księgi rezerwy (*Status*).
-
-**Fallback:** przy problemach z transformerem trzecią metodą zostaje **TF-IDF + LinearSVC**
-(mniej powtórki DL, rdzeń rubryki zachowany). Przy budżecie bliższym 50 h — od początku tnij HPO
-i UI, nie wdrożenie. Poślizg o 1 slot w W1–W3 → tnij stretch/HPO i dokładaj wieczory tak, by W4
-zaczął się z działającym obrazem Docker; W4–W5 są nietykalne (wdrożenie = twardy wymóg rubryki) —
-jeśli na starcie W4 nie ma obrazu, wdrażamy baseline TF-IDF, nie czekamy na lepszy model.
-
 ## Wdrożenie
 
 - **FastAPI:** `POST /predict` (tekst → intencja, id, wersja modelu), `GET /health` (status +
@@ -582,32 +483,11 @@ jeśli na starcie W4 nie ma obrazu, wdrażamy baseline TF-IDF, nie czekamy na le
   (18.10, 6 min 28 s). Manifesty (W4): `k8s/deployment.yaml` (2 repliki, sondy startowa/gotowości/życia na `/health`,
   requests 500m CPU / 512Mi, limit pamięci 1Gi), `k8s/service.yaml` (NodePort 30080),
   `k8s/kind/cluster.yaml` (konfiguracja klastra kind, węzeł przypięty digestem).
-- **GKE (stretch #4, wykonane 22.10 ręcznie, poza CI):** ten sam obraz i te same manifesty na
-  GKE Autopilot w `europe-central2` (Warszawa, Kubernetes 1.36.4-gke). Klaster żył ok. 14 min;
-  `teardown` tego samego wieczoru — klaster i repozytorium Artifact Registry usunięte, w projekcie
-  brak VM, dysków, adresów i reguł przekierowania. Przebieg (komendy w *Quickstart*; log z ID
-  projektu zastąpionym przez `<PROJECT>`: [`docs/gke-2026-10-22.log`](docs/gke-2026-10-22.log)):
-  - obraz z czystego drzewa `fbf1627` (pliki modelu zgodne z manifestem Release); push do
-    Artifact Registry 36 s — obraz amd64 821 775 937 B, wdrożony po digeście indeksu
-    `sha256:c85a5c62…`;
-  - `gcloud container clusters create-auto` 255 s; rollout 193 s od `kubectl apply`: Autopilot
-    dołożył węzeł od zera, pobranie obrazu ok. 60 s, gotowość ok. 12–14 s po starcie kontenera —
-    do tego czasu sonda startowa dostawała connection refused (uvicorn słucha dopiero po
-    załadowaniu i rozgrzaniu modelu; w kontenerze lokalnie ok. 4 s);
-  - smoke `[OK]` przez `kubectl port-forward` (`/health`, 14 zdań kontrolnych, 422, wersja
-    `distilbert-v1`); 2/2 pody, 0 restartów, po 369 MiB RAM; Autopilot nie zmienił zasobów
-    z manifestu (dodał tylko domyślne ephemeral-storage 1Gi);
-  - konto usługi węzłów nie miało w nowym projekcie żadnych ról → `roles/artifactregistry.reader`
-    tylko na repozytorium obrazu;
-  - bez publicznego adresu: Service NodePort bez reguły zapory, test przez port-forward — trafia
-    w jeden pod, więc nie sprawdza rozkładu ruchu przez Service.
+- **GKE (stretch #4, wykonane 22.10 ręcznie, poza CI):** ten sam obraz i te same manifesty na GKE
+  Autopilot w `europe-central2`; obraz z Artifact Registry przypięty digestem, test przez port-forward,
+  klaster żył ok. 14 min i został usunięty tego samego wieczoru. Koszt z rozliczeń GCP: 0,10 zł, do
+  zapłaty 0,00 zł. Przebieg, czasy, uprawnienia i log: [docs/GKE.md](docs/GKE.md).
 
-  Koszt wg cennika GKE dla Warszawy (22.10): pody 0,0573 USD za vCPU·h i 0,0063421 USD za GiB·h
-  (Autopilot liczy zasoby podów, nie węzła) → nasze 2 × 0,5 vCPU / 0,5 GiB ≈ 0,064 USD/h; opłatę
-  za klaster 0,10 USD/h pokrywa kredyt GKE (74,40 USD/mies. na konto rozliczeniowe), **nie
-  compute**; Artifact Registry: 0,5 GiB miesięcznie bez opłat. Rzeczywista kwota wg raportu
-  rozliczeń GCP za październik 2026 (odczyt 28.10): koszt 0,10 zł, w całości pokryty środkami
-  („inne oszczędności” −0,10 zł) — do zapłaty 0,00 zł.
 - **Sekrety:** `GROQ_API_KEY` tylko w `.env` (poza gitem) / GitHub Secrets; w kodzie i configu
   żadnych kluczy.
 
@@ -641,201 +521,6 @@ i miejsca, w których projekt je realizuje:
 | 3c. Testy jednostkowe | `tests/` (pytest w CI: [`ci.yaml`](.github/workflows/ci.yaml)), w tym strażnik protokołu [`tests/test_contract.py`](tests/test_contract.py) |
 | 4a. API, konteneryzacja, wdrożenie na klaster, CI/CD | FastAPI ([`src/banking77_intent_ml/api/`](src/banking77_intent_ml/api/)), [`Dockerfile`](Dockerfile), [`k8s/`](k8s/), workflow [`deploy-kind.yaml`](.github/workflows/deploy-kind.yaml) z testem HTTP — [Wdrożenie](#wdrożenie) |
 | 4b. Lokalnie lub na GCP | kind lokalnie i w CI; GKE Autopilot (stretch, 22.10) — [Wdrożenie](#wdrożenie) |
-
-## Status
-
-- [x] Szkielet projektu (pakiet, config, CI, uv) — przeniesiony z poprzedniego tematu
-- [x] Smoke testy: GPU (torch cu128, sm_120, `scripts/smoke_gpu.py`), klucz Groq przez LiteLLM
-      (`scripts/smoke_llm.py`) — infrastruktura sprawdzona przed pivotem
-- [x] **30.09:** decyzja o zmianie tematu na BANKING77 · **2.10:** nowy plan-of-record, config,
-      strażnik protokołu (`tests/test_contract.py`) i `scripts/fetch_data.py` w repo
-- [x] **ADR-0001 — zmiana tematu na BANKING77**: zaakceptowany 9.10 (kontekst i opcje zestawione
-      z notatek researchu; sekcje *Decyzja* i *Konsekwencje* — autor)
-- [x] **[ADR-0002 — protokół ewaluacji](docs/adr/0002-protokol-ewaluacji.md)** — zaakceptowany 14.10:
-      grupowany split, grupa konfliktowa, mapa etykiet, podzbiory testowe i refit na 10 003.
-- [x] **W1** (pt 2.10 wieczór + weekend 3–4.10; twarde minimum domknięte w wieczory 5–9.10):
-  - [x] dane pobrane i zweryfikowane (`scripts/fetch_data.py`: SHA-256, 10 003 / 3 080 wierszy)
-  - [x] loader z walidacją struktury (`data/loader.py`) + testy na sztucznych CSV
-  - [x] mapa etykiet `configs/label_map.json` (77 kategorii, id wg `sorted()` nazw)
-  - [x] zamrożony split train/val (`scripts/make_splits.py`): 8 504 / 1 499, 9 972 grupy
-    duplikatów (31 nadmiarowych), grupa konfliktowa w train; indeksy w `dane/splits/` (w gicie)
-    + `configs/split_manifest.json`; ponowne uruchomienie tylko weryfikuje („zgodny”)
-  - [x] strażnik protokołu zielony na realnych plikach (zakres rozszerzony 4.10)
-  - [x] podzbiory testowe 3 055 / 385 + audyt nazw kategorii testu (S2, 5.10; pliki w
-    `dane/splits/` tylko do odczytu)
-  - [x] wspólna `evaluate()` + Dummy ×2 (6.10) i TF-IDF+LR (7.10) w MLflow — wyniki w tabeli niżej
-  - [x] zapis/odczyt modelu (`models/persistence.py`, 9.10): joblib + metadane (wersje bibliotek,
-    hash mapy etykiet, id runu); identyczne predykcje w nowym procesie, udowodnione testem
-  - [x] krótka EDA z wnioskami (`notebooks/01_eda.ipynb`, sekcje 1–8, 6.10); długości w tokenach
-    → sob 10.10, redakcja wniosków → wt 13.10
-  - [x] rewizje wag przypięte w configu (9.10; MiniLM i DistilBERT, licencje apache-2.0) + test
-    uruchomienia DistilBERT na GPU (`scripts/smoke_gpu.py`, 9.10): działa — mini-epoka 10 kroków
-    × batch 32 na zdaniach z train, bf16, szczyt VRAM 1,40 GB z 17,1 GB; bez metryk
-  - Bramka po W1: 4.10 nie przeszła (brak baseline'u w MLflow i testu zapisu/odczytu), warunkowo
-    kontynuowano; **powtórka pt 9.10: zielona — kontynuujemy, W2 od 10.10** (szczegóły:
-    *Bramka po W1 i fallback*)
-  - Co nie zadziałało: twarde minimum nie zmieściło się w weekendzie 3–4.10 — baseline
-    w MLflow i zapis/odczyt przechodzą na wieczory 5–9.10 (pierwsze do cięcia: DistilBERT, EDA)
-- [x] **2.10 — zależności pod BANKING77**: z zależności głównych usunięte `xgboost`, `duckdb`,
-      `pygeohash`; dodany extra `serving` (`fastapi`, `uvicorn[standard]`, `httpx` — wymagany przez
-      `TestClient`); `optuna` zostaje do decyzji przy HPO w W2 (Optuna czy siatka) — rozstrzygnięte
-      w W2: Optuna (TPE) dla TF-IDF+LR, siatka dla kNN i DistilBERT
-- [x] **W2** (plan 10–11.10, realizacja 12–14.10): trzy ścieżki + HPO + pomiary CPU + API
-  z baseline'em — **zamknięty 14.10, bramka zielona**; ADR-0002 i decyzja o reficie zapisane 14.10 (W3)
-  - [x] HPO TF-IDF+LR (12.10): Optuna TPE, 16 prób na walidacji, wybór po macro-F1 (remis → mniej
-    cech); zamrożona próba #12 w `models.tfidf_lr.frozen`
-  - [x] MiniLM+kNN (12.10): embeddingi z przypiętej rewizji (cache), siatka k {1, 3, 5, 10} ×
-    {uniform, distance} na walidacji; zamrożone k = 1, `uniform` w `models.minilm_knn.frozen`
-  - [x] DistilBERT (13.10): 5 LR {2–6}e-5 × 5 epok (budżet podniesiony z 2–3 przed wynikami),
-    ocena co epokę, wybór po macro-F1 (remis → mniej epok); zamrożony wariant 4, epoka 4
-    w `models.distilbert.frozen`, artefakt w `models/distilbert/`; zwycięzca na brzegu siatki LR
-  - [x] Wspólny interfejs predyktora (13.10): `IntentClassifier` + fabryka z configu + trzy
-    adaptery (kod autora); test kontraktu zielony dla trzech ścieżek; każdy adapter odtwarza
-    zamrożony run na walidacji co do bitu; artefakty `models/tfidf_lr/` i `models/minilm_knn/`
-    (`scripts/export_model.py`, trening na train) oraz `models/distilbert/` z zamrożenia
-  - [x] FastAPI z baseline'em (13.10): `POST /predict` (top-1: intencja, id, `score`, wersja
-    modelu), `GET /health`, 422 dla pustego lub za długiego tekstu (> 500 znaków), predyktor
-    ładowany raz (lifespan); serwuje `api.model` (TF-IDF+LR); lokalnie port 8080 (8000
-    zarezerwowany przez Windows)
-  - [x] Pomiary kosztu CPU (14.10): latencja batch=1 p50/p95 przy 1 i 8 wątkach, zimny start,
-    rozmiar artefaktu — tabela *Koszt na CPU* niżej
-  - Co nie zadziałało: weekend 10–11.10 bez pracy, więc W2 przesunął się na 12–14.10.
-    Czas zabrały też problemy środowiska: czerwone CI po imporcie `sentence-transformers`,
-    brak `accelerate`, zmiany API w `transformers` 5 i puste `CUDA_VISIBLE_DEVICES` na Windows.
-- [x] **W3** (plan 12–18.10, realizacja 14–18.10; zamknięty 18.10): zamrożenie, ocena końcowa,
-  analiza błędów, artefakt, testy, Docker
-  - [x] Zamrożenie (14.10): ADR-0002 (protokół z W1 + refit przed testem), tag
-    `experiments-frozen` na `d809c57`
-  - [x] Refit na 10 003 (14.10): runy `final_refit`, artefakty w `models/final/`; koszt
-    finalnych artefaktów — badanie `cpu_cost_final`
-  - [x] Ocena końcowa na teście — raz (14.10): tabela końcowa i interpretacja niżej
-  - [x] Analiza błędów (15.10): notebook 02, wnioski w sekcji *Analiza błędów (W3)*
-  - [x] ADR-0003 (15.10): wdrażamy DistilBERT; model w CI z GitHub Release (opcja a); sekcja
-    `deploy` w configu (`distilbert-v1`, `models/final/distilbert`)
-  - [x] Obraz Docker CPU (15.10): `banking77-intent-api:distilbert-v1`, **3,18 GB** (`.venv`
-    1,9 GB — torch CPU 750 MB, pyarrow 153 MB, scipy 113 MB, transformers 112 MB; model 257 MiB);
-    torch 2.11.0+cpu (`torch.version.cuda` = None, brak pakietów `nvidia-*`); model ładuje się
-    bez sieci; gotowość 3,5 s od `docker run`; RAM 391 MiB; test przeniesienia: te same id
-    w 50/50, |Δ score| ≤ 3e-07. Zależności główne (mlflow, optuna, matplotlib, seaborn,
-    pyarrow) zostają w obrazie — decyzja autora 15.10, rozmiar zmierzony
-  - [x] `scripts/smoke_api.py` (15.10): `/health` z wersją z configu, 14 zdań kontrolnych
-    (napisanych na potrzeby testu, nie ze zbioru) z oczekiwanymi wynikami ocenionego artefaktu
-    (`configs/smoke_cases.json`), 422 dla pustego tekstu; wobec kontenera: [OK]. Test
-    przeniesienia na dawnej walidacji wykonany jednorazowo (te same id w 50/50)
-  - [x] Testy W3 §1.5 (16.10): mapa etykiet (`test_labels`, strażnik w `test_contract`),
-    walidacja wejścia API — 422 (`test_api`), zapis i odczyt dla trzech adapterów z identycznymi
-    predykcjami (`test_predictor`, test kontraktu), API przez TestClient, smoke (`test_smoke_api`);
-    strażnik protokołu 0,06 s. Zgodność wersji: artefakty sklearn — odczyt odmawia przy innej
-    wersji sklearn (`test_persistence`); DistilBERT — obraz instaluje z tego samego `uv.lock`
-    (transformers 5.13.0, torch 2.11.0), a smoke porównuje wyniki zdań kontrolnych z ocenionym
-    artefaktem (decyzja autora 16.10: bez osobnej kontroli wersji w `load`)
-  - [x] Rozgrzewka DistilBERT (18.10): `load` wykonuje predykcję na syntetycznym tekście przed
-    gotowością API. Pomiary kontenera z 15.10 dotyczą wersji sprzed tej zmiany.
-  - Co nie zadziałało: notebook wymagał poprawy typów komórek i uzupełnienia obliczeń dla
-    podanych liczb. Obraz CPU pozostał duży (3,18 GB), bo zachowano zależności treningu i analizy.
-- [x] **W4** (start nd 18.10, wieczory 19–22.10; pt–nd 23–25.10 bez pracy — decyzja autora 18.10;
-  zamknięty 26.10): kind + workflow CI + test HTTP + odtworzenie z instrukcji
-  - [x] Runner CI przypięty do `ubuntu-24.04` (18.10; `ubuntu-latest` przechodzi na 26.04 od 19.10)
-  - [x] Obraz przebudowany z rozgrzewką DistilBERT (18.10): build 94 s z cache zależności;
-    gotowość 3,96 s od `docker run`, pierwsze `/predict` 15,5 ms (kolejne 13,4–14,6 ms),
-    RAM 382 MiB, smoke [OK]
-  - [x] Manifesty `k8s/` + test lokalny na kind v0.33.0 / Kubernetes v1.37.0 (18.10): decyzje
-    autora — 2 repliki, requests 500m CPU / 512Mi, limit pamięci 1Gi bez limitu CPU, Service
-    NodePort; utworzenie klastra 54 s, `kind load` 54 s, rollout 4 s, smoke [OK] przez NodePort,
-    ruch na obie repliki (19/16 żądań), pamięć podów 381/377 MiB, bez restartów
-  - [x] Model w GitHub Release (18.10; ADR-0003, opcja a): Release `distilbert-v1`, asset
-    268 789 760 B, SHA-256 w `deploy.release_sha256`; `scripts/model_release.py pack/unpack`
-    (manifest: sumy plików, mapa etykiet, wersje bibliotek, runy refit `5b883a97` i ocena
-    `fb0d0bde`); pobranie z GitHuba i weryfikacja: 5 plików bajt w bajt zgodnych z ocenionym
-    artefaktem. Użycie w workflow — w `deploy-kind.yaml`
-  - [x] Workflow `deploy-kind.yaml` (18.10): zielony za pierwszym razem na PR #1 i na `main` —
-    [run 39138227351](https://github.com/MarcinPrDev/banking77-intent-ml/actions/runs/39138227351),
-    6 min 28 s. Kroki (run na PR): zwolnienie dysku 85 s (wolne 13 → 31 GB z 72 GB, po budowie
-    24 GB), model z Release + weryfikacja 4 s, budowa obrazu od zera 98 s (2,21 GB), klaster kind
-    44 s, `kind load` 100 s, rollout 13 s, smoke 3 s; tag w Deployment = `deploy.model_version`;
-    akcje przypięte pełnym SHA, bez sekretów (tylko `GITHUB_TOKEN`)
-  - [x] Próba odtworzenia na świeżych klonach (21–22.10): **łącznie ok. 38 min, 4 potknięcia**
-    (2 niespełnione warunki wstępne, blokada portów, błąd własnego skryptu spoza repo).
-    **Ciepłe cache uv, Dockera, wag HF i obrazu kind**.
-    Czas obejmuje obsługę i diagnozę; nie jest obietnicą czasu pierwszego uruchomienia.
-  - Zaliczono 21.10 (`4504fcc`): testy 264/264, lint, weryfikację Release, budowę obrazu oraz
-    A1–A6 w osobnym klonie. Ocena testowa raz w nowym MLflow; predykcje i score wszystkich
-    trzech modeli identyczne z pierwotnymi runami — porównanie `predictions_test.csv` z obu
-    magazynów MLflow po `row_id` (3 080 wierszy na model, zero różnic klas i score).
-    Zaliczono 22.10: smoke lokalnego API,
-    kontenera i kind na 18080/18081, ze świeżego klonu lokalnego commita `a6d7be5`, z własnym
-    środowiskiem i ponownie pobranym Release. A1–A6 bez powtórki.
-  - Warunki wstępne: Docker Desktop był wyłączony, a aktywne konto `gh` (`MartinPrG`) nie miało
-    dostępu do repo. Uruchomiono Dockera i użyto konta `MarcinPrDev`; zmiana konta zajęła
-    ok. 30 s od odmowy do poprawnego ponowienia komendy. To nie błędy instrukcji.
-  - Co nie zadziałało: wykluczone porty hosta 8080/8081 oraz zbyt krótki timeout we własnym
-    skrypcie pomocniczym spoza repo, sprawdzającym gotowość API (nie w `smoke_api.py`).
-    Wykluczenie TCP 8071–8170 potwierdził `netsh interface ipv4 show excludedportrange protocol=tcp`.
-    Objaw: odmowa dostępu do gniazda, mimo załadowania modelu i poprawnej budowy obrazu.
-    Czas stracony na Docker, porty i skrypt pomocniczy: niezmierzony osobno. Po uruchomieniu
-    Dockera, zmianie konta i portów oraz pominięciu tego skryptu właściwe smoke testy przeszły.
-  - Wcześniejsza próba 18.10 (próba techniczna asystenta): testy, budowa obrazu i smoke
-    kontenera oraz kind przeszły.
-    Poprawiono kolejność pobrania modelu przed API, dopisano `--extra cpu` dla macOS oraz
-    sekcję *Odtworzenie wyników* (A — zamrożone modele, B — ponowne HPO).
-  - Odniesienie dla wdrożenia bez cache: [Deploy kind, run 39138227351](https://github.com/MarcinPrDev/banking77-intent-ml/actions/runs/39138227351)
-    na świeżym runnerze GitHuba — 6 min 28 s, szczegóły wyżej. Ten run nie obejmuje treningów
-    A1–A6. Po zmianie portu kind na 18081 workflow zielony na `7a97783`
-    ([run 39849732584](https://github.com/MarcinPrDev/banking77-intent-ml/actions/runs/39849732584))
-    i `eaed6f7` ([run 39858858539](https://github.com/MarcinPrDev/banking77-intent-ml/actions/runs/39858858539)).
-  - [x] Stretch po rdzeniu, do czw 22.10 — wszystkie cztery:
-    - [x] seedy DistilBERT na walidacji (18.10): tabela i wniosek w *Wyniki na walidacji*
-    - [x] LLM zero-shot (20.10): plan Groq Developer (decyzja autora; limity 250 000 tokenów/min
-      zamiast 8 000), walidacja v1 i v2, zamrożony v2, test 385 raz — tabela przy ocenie
-      końcowej wraz z wnioskiem
-    - [x] UI Streamlit (21.10): `src/banking77_intent_ml/ui/` — cienki klient API (formularz,
-      `/health`, `/predict`, czytelne błędy 422 i braku połączenia), extra `ui` (streamlit
-      1.66.1), 4 testy (Streamlit AppTest z atrapą API); sprawdzone na żywo z lokalnym API:
-      wymyślona wiadomość o nieotrzymanej karcie → `card_arrival`, score 0,986
-    - [x] GKE Autopilot (22.10, ręcznie, poza CI): ten sam obraz i manifesty w `europe-central2`,
-      smoke `[OK]` przez port-forward, klaster i rejestr usunięte tego samego wieczoru —
-      szczegóły i koszt w *Wdrożenie*
-  - Co nie zadziałało: Groq zwracał błędy 429 przy limicie 8 000 tokenów/min — pomogła zmiana
-    planu; przy małym limicie odpowiedzi rozumowanie zużywało go w całości, więc odpowiedź
-    była pusta. W nowym projekcie GCP konto usługi węzłów nie miało żadnych ról.
-- [x] **W5** (27–31.10; wysyłka przesunięta na pn 2.11 — decyzja autora 31.10): raport, demo,
-  reprodukowalność, dodatki, oddanie
-  - [x] Raport (27–29.10): odpowiedź na pytanie badawcze, ograniczenia, co nie zadziałało,
-    tabela wymagań projektu, EDA w *Dane*, koszt GKE z rozliczeń, spis treści i korekta spójności
-  - [x] Test obrony „całość” (28–29.10): 21 pytań, w tym 3 system design
-  - [x] Kontrola na świeżym klonie (29.10): ok. 7 min 15 s — *Quickstart*
-  - [x] gitleaks v8.30.1 czysty (`gitleaks git --log-opts="--all" --redact`; 28.10: 123 commity,
-    31.10: 168 commitów we wszystkich refach); `LICENSE` MIT (28.10); repo publiczne od 31.10
-    (PR #8), model z Release przez `curl` bez logowania
-  - [x] Dodatki po głównym badaniu, bez zmiany modelu do wdrożenia, każdy przez PR z zielonym
-    CI i Deploy kind: metryki Prometheusa (PR #2), test istotności na 3 080 (PR #3), Basal
-    zero-shot 4,5B (PR #4) i ultra na H100 (PR #5), opis kalibracji (PR #6), GIF, Space na
-    Hugging Face i `docs/PITCH.md` (PR #7)
-  - [x] Tag `v1.0-submission` — oznacza tę wersję kodu i README (31.10)
-  - [x] Wysyłka do prowadzącego (pn 2.11); feedback otrzymany 8.11
-- [x] **Poprawki po feedbacku prowadzącego (8.11.2026)** — jedyna uwaga techniczna: obraz serwujący
-  zawierał zależności treningowe. Zrobione: grupa `train` w `pyproject.toml`, obraz inferencji bez niej
-  (3,19 → 2,49 GB lokalnie; na runnerze CI 2,21 → 1,71 GB, budowa 98 → ok. 56 s), cel `train`
-  w Dockerfile, `scripts/` w kontekście budowy; 319 testów i lint zielone, smoke kontenera `[OK]`,
-  `deploy-kind` zielony na PR #10. Wersja wysłana pozostaje pod tagiem `v1.0-submission`.
-  - Co nie zadziałało: plan zakładał wysyłkę 31.10, ale dodatki po głównym badaniu (Basal,
-    kalibracja, demo online) przesunęły ją na 2.11. Model Basal 11B FP8 odpadł technicznie
-    (tryby z grafami CUDA na Windows), a Space Docker na Hugging Face wymaga konta PRO.
-- [x] **2.10 — zmiana nazwy** repo, pakietu i folderu na `banking77-intent-ml` /
-      `banking77_intent_ml` (`docs/RENAME.md`)
-- [x] **2.10 — porządki po poprzednim temacie**: notebook EDA, `csv_to_parquet.py`, `sanity_w1.py`
-      i loader US Accidents usunięte z repo (treść w historii gita do commita `bc20003`; kopie
-      robocze i dane poza repo). Loader BANKING77 i nowy `notebooks/01_eda.ipynb` powstają w W1
-- Rezerwa: zużyto **8 z 8 h** (stan po W1, 9.10: W1 zajął 20 h przy budżecie 12 h; kolejne
-  nadwyżki = świadome nadgodziny albo cięcie wg kolejności z *Bramka po W1 i fallback*;
-  aktualizacja na koniec każdego slotu)
-  - W2 (12–14.10): **14 h pracy przy budżecie 14 h — 0 h nadwyżki**; rezerwa nadal zużyta 8 z 8 h.
-  - W3 (14–18.10): **14 h pracy przy budżecie 14 h — 0 h nadwyżki**; rezerwa nadal zużyta 8 z 8 h.
-  - W4 (18–22.10): **ok. 22 h pracy przy budżecie 14 h — ok. 8 h nadwyżki** (świadome nadgodziny;
-    rezerwa wyczerpana po W1). Łącznie W1–W4 ok. 70 h wobec 54 h budżetu slotów.
-  - W5 (26–31.10): **24 h pracy przy budżecie 6 h — 18 h nadwyżki** (świadome nadgodziny:
-    wieczory 26–30.10 i dodatki 29–31.10), w tym ok. 21 h w sesjach z asystentem (znaczniki
-    czasu sesji, przerwa powyżej 30 min kończy blok). Łącznie W1–W5 ok. 94 h wobec 60 h planu.
 
 ## Wyniki
 
@@ -979,9 +664,7 @@ Artefakt MiniLM + kNN = indeks 10 003 wektorów + wagi enkodera z cache Hugging 
 
 Źródło: runy `fb0d0bde`, `04ec980a`, `0c08edb4` z commita `6cae45d`; jedna ocena na ścieżkę.
 Wyniki na 385 przykładach — niżej, razem z LLM (stretch 2, 20.10).
-DistilBERT wybrano do wdrożenia po obejrzeniu wyników testu, z uwzględnieniem kosztów.
-93,02% to wynik zamrożonego modelu, ale nie niezależne potwierdzenie tego wyboru.
-Wybór spośród trzech modeli zamrożonych przed testem; po ocenie bez dalszego strojenia.
+O wyborze modelu po teście i jego konsekwencjach — [Odpowiedź na pytanie badawcze](#odpowiedź-na-pytanie-badawcze) i [ADR-0003](docs/adr/0003-wybor-modelu-do-wdrozenia.md).
 
 ### Istotność różnic accuracy (3 080)
 
@@ -1072,7 +755,7 @@ v1 — accuracy 79,74%, macro-F1 79,71%, 2 błędy formatu (run `526e5400`); **v
 81,47%, 4 błędy (run `081d183e`); zamrożony v2 wg macro-F1 (decyzja autora 20.10). Tokeny na
 teście: 215 396 wejścia / 17 285 wyjścia (ok. 560 na zapytanie — lista 77 etykiet w promptcie).
 Latencja LLM obejmuje sieć i kolejkę API, więc nie porównuje się wprost z pomiarami CPU modeli
-lokalnych. Ekspozycja modelu na benchmark nieustalona — wynik nie dowodzi generalizacji.
+lokalnych. Ekspozycja na benchmark — zob. protokół pkt 8 i *Ograniczenia*.
 
 ### Basal zero-shot — dodatek z 30–31.10
 
@@ -1090,17 +773,9 @@ Klasyfikacja intencji ma właśnie taki kształt, więc Basal nadawał się do s
 Dodatek jest hobbystyczny i wykracza poza wymagania zaliczenia: powstał z ciekawości,
 żeby sprawdzić nowy model w praktyce i dowiedzieć się jak najwięcej.
 
-Rozszerzenie po głównym badaniu, bez zmiany wybranego modelu do wdrożenia.
+Rozszerzenie po głównym badaniu, bez zmiany wybranego modelu do wdrożenia. Pełny opis obu badań (prerejestracje, środowisko, wybór wariantu opisów v1/v2 na walidacji, latencje, koszty): [docs/BASAL.md](docs/BASAL.md); środowisko ultra na H100: [docs/basal-ultra.md](docs/basal-ultra.md).
 
 #### Basal 4,5B — badanie 1, 30–31.10
-
-Prerejestracja: `9360375`, infrastruktura: `3e054ef`, instrukcja i opisy v2: `5c6797f`.
-Plan obejmował dwa modele i dwa warianty opisów. Model 11B FP8 odpadł technicznie:
-w tym środowisku Windows tryby z grafami CUDA nie zmieściłyby się w 16 GB lub wymagałyby
-niedostępnego Tritona, a `eager` nie obsługuje poprawnie jego formatu ModelOpt FP8.
-Ustalone z kodu silnika i rozmiarów wag oraz buforów KV, bez uruchomienia modelu 11B.
-Zmiana prerejestracji (`16fb241`) przed odczytem wyników walidacji 4,5B, nie na podstawie
-jakości 11B. Pozostało porównanie v1 i v2 na modelu 4,5B.
 
 Model `Remek/basal-2.0-4.5B`, rewizja `e5ba914`, silnik `basal-serve` 2.4.1.
 Wybór jednej z 77 podanych intencji, bez swobodnego generowania odpowiedzi.
@@ -1110,24 +785,6 @@ Wspólna instrukcja dla obu wariantów; v1 to nazwy etykiet zapisane jako frazy,
 a v2 — krótkie opisy. Niejednoznaczne nazwy sprawdzone wyłącznie na części treningowej.
 Kalibracja dostarczona z modelem, bez własnego dopasowania. Jej jakość na BANKING77 zmierzona
 na zapisanych predykcjach — zob. [Kalibracja score](#kalibracja-score-na-teście-3-080).
-
-Walidacja: te same 385 zdań co dla LLM, po 5 na klasę, zgodny `sha256_val_sample` w runach.
-Każdy wariant oceniony raz. Wybór według macro-F1; różnica od najlepszego wyniku poniżej
-0,001 oznacza remis rozstrzygany kosztem modelu, potem pierwszeństwem v1.
-
-| Kandydat | Macro-F1 (walidacja 385) | Accuracy (walidacja 385) | p50 żądania HTTP | Run MLflow |
-|---|---:|---:|---:|---|
-| **4,5B v2** | **0,8080** | **0,8156** | 1 101,5 ms | `ad6c563c` |
-| 4,5B v1 | 0,7435 | 0,7506 | 482,6 ms | `c4aff0b3` |
-
-Opisy v2 poprawiły macro-F1 o 0,0645, przy wyższej latencji. Zwyciężyła jakość, reguła remisu
-nie zadziałała. Na tej samej walidacji LLM v2 miał macro-F1 0,8147 (`081d183e`), a LLM v1
-0,7971 (`526e5400`). Wynik Basal 4,5B v2 jest bliski LLM v2, ale dotyczy to tylko walidacji.
-
-Pomiar na RTX 5080, tryb `eager`, `--template-prefix off --deterministic`, batch=1.
-p50 to `latency_wall_p50_ms`: czas po stronie klienta, z lokalnym HTTP.
-Tryby z grafami CUDA dla 4,5B nie zmieściły się w pamięci; pomiar nie pokazuje najlepszej możliwej
-wydajności silnika. Inne warunki niż predykcja lokalnych klasyfikatorów na CPU i zdalne API LLM.
 
 Zamrożony wybór: `basal_4_5b` / `v2`, commit `4a87d48` przed testem.
 Test 31.10: jeden przebieg na 3 080 zdaniach, z tych samych predykcji także wynik na
@@ -1152,16 +809,6 @@ zarówno na 3 080, jak i na 385 zdaniach. W tym badaniu brak dostrajania nie zre
 niższej jakości i kosztu predykcji na GPU. Wniosek dotyczy modelu 4,5B z opisami v2 w trybie
 `eager`, nie całej rodziny Basal ani najlepszego możliwego czasu tego silnika.
 
-Na 385 wiadomościach Basal 4,5B trafił 303 razy, a LLM 311 — różnica 8 odpowiedzi.
-Na walidacji Basal 4,5B miał wyższe accuracy (o jedną wiadomość: 314 wobec 313),
-ale niższe macro-F1 niż LLM v2.
-Nie rozstrzygam trwałej przewagi jednej z tych ścieżek. Testu istotności dla tej pary
-nie było w prerejestracji i nie został wykonany.
-
-Macro-F1 Basala 4,5B spadło z 0,8080 na walidacji (385) do 0,7966 na pełnym teście (3 080)
-i 0,7787 na podzbiorze testowym (385). To różne próbki; sam spadek nie dowodzi przeuczenia
-opisów. Pokazuje ograniczenie przenoszenia wyniku z małej walidacji na test.
-
 #### Basal ultra — badanie 2, 31.10
 
 Osobna prerejestracja `9f36a77`, przed obliczeniami. Model `Remek/basal-omni-1.0-ultra`
@@ -1170,30 +817,12 @@ Te same instrukcje, opisy v1/v2 i próbka walidacji 385 zdań co dla 4,5B; zgodn
 zapisana w MLflow. Bez dostrajania wag w projekcie; wcześniejsza ekspozycja na BANKING77
 pozostaje nieustalona. Szczegóły środowiska i przebiegu: [notatka](docs/basal-ultra.md).
 
-| Ultra | Macro-F1 (walidacja 385) | Accuracy (walidacja 385) | Run MLflow |
-|---|---:|---:|---|
-| v2 | 0,8562 | 0,8597 | `b8944d95` |
-| v1 | 0,7896 | 0,7948 | `c6e90ce6` |
-
-Wybrany v2 według tej samej reguły macro-F1; remis nie wystąpił. Wpis frozen `aad7425`
-przed jedynym testem, run `b855251a`. Wyniki na 3 080 i 385 zdaniach w tabeli powyżej.
-
 Ultra trafiła 2 612 z 3 080 wiadomości, o 136 więcej niż 4,5B (2 476).
 Nadal niższe accuracy i macro-F1 niż wszystkie trzy modele uczone na BANKING77.
 Na tych samych 385 zdaniach: ultra 319 trafień, LLM v2 311, Basal 4,5B 303,
 a modele uczone 351–354. Ultra uzyskała tu najwyższe wyniki spośród badanych ścieżek
 zero-shot. To wynik tej próbki, nie dowód trwałej przewagi nad LLM.
 Dla porównań z Basalem nie zaplanowano z góry ani nie wykonano testów istotności.
-
-Macro-F1 ultra spadło z 0,8562 na walidacji (385) do 0,8441 na pełnym teście (3 080)
-i 0,8107 na podzbiorze testowym (385). Tak jak dla 4,5B, różne próbki nie pozwalają
-przypisać samego spadku przeuczeniu opisów.
-
-Test: p50/p95 po stronie serwera 716/722 ms, po stronie klienta 952/978 ms.
-Czas klienta obejmuje tunel SSH do Norwegii. Także czas serwera nie daje porównania
-szybkości samych modeli: ultra działała na H100, a 4,5B na RTX 5080.
-Oba badania w trybie `eager`, zgodnie z protokołem. Nie mierzono ultra z grafami CUDA;
-716 ms nie należy traktować jako najlepszego możliwego czasu silnika na H100.
 
 Koszt z rozliczeń RunPod: 9,90 USD, w tym GPU 9,83 USD i dyski 0,07 USD.
 Pod działał około 2 h 28 min, w tym około 1 h 18 min oczekiwania na wpis frozen.
@@ -1339,23 +968,6 @@ Dodatkowo (31.10):
   `basal-omni-1.0-ultra` został już oceniony w badaniu 2. Ten sam protokół: wybór wariantu
   na walidacji 385, jeden przebieg testu dla zamrożonego wyboru. Dla 11B FP8 potrzebne GPU,
   na którym zmieszczą się tryby z grafami CUDA.
-
-## Historia decyzji
-
-- **[ADR-0001](docs/adr/0001-zmiana-tematu-na-banking77.md) — zmiana tematu z US Accidents na BANKING77**.
-  Etykieta `Severity` w US Accidents okazała się mieszanką skal różnych dostawców API z dryfem
-  schematu (udział klasy 3 w Source1 spada z ~18% do 0% od 2021; zgodność między źródłami
-  kappa 0,01–0,05), bez uczciwego publicznego punktu odniesienia dla kontraktu „w chwili
-  zgłoszenia". Przy budżecie 50–65 h do 31.10 i szacunku 59–89 h dla starego planu wybrano
-  zbiór z ugruntowanym benchmarkiem i gotowym testem (kryterium: bezpieczeństwo terminu).
-- Wnioski z audytu US Accidents (drabina leakage, kappa źródeł) i temat NHTSA Recalls →
-  **po oddaniu projektu**, nie jako stretch.
-- **[ADR-0002](docs/adr/0002-protokol-ewaluacji.md) — protokół ewaluacji** (zaakceptowany 14.10):
-  grupowany split, grupa konfliktowa, mapa etykiet, podzbiory testowe 3 055 / 385 i refit
-  na 10 003 przed testem.
-- **[ADR-0003](docs/adr/0003-wybor-modelu-do-wdrozenia.md) — wybór modelu do wdrożenia i źródło
-  artefaktu w CI** (zaakceptowany 15.10): DistilBERT, model w CI z GitHub Release (opcja a);
-  wybór po ocenie na teście, bez liczbowego progu — zob. *Odpowiedź na pytanie badawcze*.
 
 ## Tooling — współpraca z AI
 
