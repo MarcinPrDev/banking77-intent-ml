@@ -5,16 +5,25 @@ description = "Klasyfikacja zgloszen na BANKING77 (77 intencji): TF-IDF+LR vs za
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Marcin Proch" }]
+# Zależności główne = tylko to, czego potrzebuje działająca usługa (config, mapa etykiet, adaptery,
+# zapis/odczyt). Trening, HPO, MLflow i analiza są w grupie `train` niżej (poprawka po feedbacku
+# prowadzącego, 8.11.2026) — lokalnie i w CI instalują się domyślnie, obraz serwujący je pomija.
 dependencies = [
+    "scikit-learn>=1.5",
+    "pyyaml>=6.0",
+    "joblib>=1.5.3",
+]
+
+# Grupa treningowo-analityczna (PEP 735). `uv sync` instaluje ją domyślnie ([tool.uv] default-groups),
+# więc lokalne komendy i CI nie zmieniają się; obraz Docker inferencji: --no-default-groups.
+[dependency-groups]
+train = [
     "pandas>=2.2",
     "pyarrow>=16",
-    "scikit-learn>=1.5",
     "optuna>=3.6",
     "mlflow>=2.14",
     "matplotlib>=3.9",
     "seaborn>=0.13",
-    "pyyaml>=6.0",
-    "joblib>=1.5.3",
 ]
 
 [project.optional-dependencies]
@@ -48,8 +57,8 @@ serving = [
     "prometheus-client>=0.25.0",       # GET /metrics (dodatek W5, 29.10)
 ]
 # Obraz serwujący (W3, ADR-0003): torch z indeksu CPU — bez CUDA i pakietów nvidia-* (koło z PyPI
-# na Linuksie zawiera CUDA). Rozłączny z `gpu` ([tool.uv] conflicts); w obrazie:
-# uv sync --frozen --no-dev --extra serving --extra cpu
+# na Linuksie zawiera CUDA). Rozłączny z `gpu` ([tool.uv] conflicts); w obrazie inferencji:
+# uv sync --frozen --no-dev --no-default-groups --extra serving --extra cpu
 cpu = [
     "torch==2.11.0",                     # ta sama wersja co trening i ocena na teście (2.11.0+cu128)
     "transformers>=4.44",
@@ -59,6 +68,7 @@ ui = [
 ]
 
 [tool.uv]
+default-groups = ["train"]
 conflicts = [
     [
         { extra = "gpu" },

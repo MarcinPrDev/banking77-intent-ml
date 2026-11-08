@@ -46,7 +46,11 @@ Repo i pakiet przemianowane 2.10.2026 (wcześniej `us-accidents-ml` / `us_accide
   po każdym sync na GPU sprawdź `torch.cuda.is_available()`. `uv run` jest bezpieczny (inexact).
   Extras: `nlp` (sentence-transformers), `gpu` (torch cu128 + transformers), `llm` (groq + litellm),
   `serving` (fastapi, uvicorn, httpx), `ui` (streamlit), `cpu` (torch CPU — tylko obraz Docker,
-  rozłączny z `gpu`).
+  rozłączny z `gpu`). Od 8.11.2026 (feedback prowadzącego): pandas, pyarrow, optuna, mlflow,
+  matplotlib, seaborn są w grupie `train` (`[dependency-groups]`, domyślnie instalowana przez
+  `uv sync`); obraz serwujący buduje się z `--no-default-groups`, więc **kod ścieżki serwowania
+  (`api/`, `models/factory|classifiers|predictor|persistence`, `config/`, `data/labels`) nie może
+  importować tych pakietów na poziomie modułu**; cel `train` w Dockerfile ma pełne środowisko CPU.
 - MLflow (od 6.10.2026: SQLite): `configure_mlflow(settings)` z `evaluation/tracking.py` na starcie
   każdego skryptu i notebooka — runy w `mlflow.db`, artefakty w `mlruns/`, oba jako bezwzględne
   ścieżki z configu. MLflow 3.14 odrzuca magazyn plikowy, a bez jawnego URI zapisuje do `mlflow.db`

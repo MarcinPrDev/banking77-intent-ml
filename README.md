@@ -236,7 +236,8 @@ splitu niesie tylko hash, więc w CI trzeba odtworzyć podział `make_splits` i 
 z manifestem — albo refitować na całych 10 003 bez podziału) — odrzucone, bo tworzy nowy
 artefakt; (c) GCS (tylko jeśli GCP wejdzie jako stretch) — odrzucone. W4 implementuje (a).
 Wybrany DistilBERT wymaga torcha CPU w obrazie — rozmiar 3,18 GB (W3); budowa od zera w CI
-98 s (run `deploy-kind` na PR #1, 18.10 — *Status*, W4).
+98 s (run `deploy-kind` na PR #1, 18.10 — *Status*, W4). Po feedbacku prowadzącego (8.11.2026)
+zależności treningu i analizy wydzielono z obrazu serwującego — zob. *Wdrożenie: Docker*.
 
 **Release `distilbert-v1` (18.10):**
 [github.com/MarcinPrDev/banking77-intent-ml/releases/tag/distilbert-v1](https://github.com/MarcinPrDev/banking77-intent-ml/releases/tag/distilbert-v1)
@@ -325,6 +326,9 @@ z configu:
 docker build --build-arg MODEL_VERSION=distilbert-v1 -t banking77-intent-api:distilbert-v1 .
 docker run --rm -p 18080:8000 banking77-intent-api:distilbert-v1
 uv run python scripts/smoke_api.py --url http://localhost:18080   # drugi terminal: smoke
+# Obraz treningowo-analityczny na CPU (ten sam Dockerfile, cel `train`: grupa `train` + MiniLM;
+# trening DistilBERT nadal wymaga GPU poza obrazem) — poprawka po feedbacku, 8.11.2026:
+docker build --target train -t banking77-intent-train .
 ```
 
 **Klaster kind lokalnie** (W4; kind v0.33.0, kubectl ≥ 1.36, obraz zbudowany wyżej) — te same
@@ -558,9 +562,17 @@ jeśli na starcie W4 nie ma obrazu, wdrażamy baseline TF-IDF, nie czekamy na le
 - **Docker:** obraz CPU z wpieczonym artefaktem; jeden wybrany model. Config i mapa etykiet
   w obrazie: `COPY configs/ /app/configs/` + `ENV BANKING77_CONFIG=/app/configs/config.yaml`
   (settings liczą ścieżki od położenia configu). DistilBERT z torchem z indeksu CPU, nie
-  z PyPI (na Linuxie koło z PyPI zawiera CUDA). Rozmiar: 2,21 GB na runnerze CI
-  (`docker image ls`); lokalnie Docker Desktop pokazuje 3,18 GB zajętości dysku przy 822 MB
-  skompresowanej treści — inna księgowość magazynu obrazów. Budowa od zera w CI: 98 s.
+  z PyPI (na Linuxie koło z PyPI zawiera CUDA). Rozmiar (wersja `v1.0-submission`): 2,21 GB na
+  runnerze CI (`docker image ls`); lokalnie Docker Desktop pokazuje 3,18 GB zajętości dysku przy
+  822 MB skompresowanej treści — inna księgowość magazynu obrazów. Budowa od zera w CI: 98 s.
+  **Poprawka po feedbacku prowadzącego (8.11.2026):** zależności treningu i analizy (pandas, pyarrow,
+  optuna, mlflow, matplotlib, seaborn) przeniesione z `dependencies` do grupy `train` (PEP 735;
+  `uv sync` instaluje ją domyślnie, więc komendy lokalne i CI bez zmian); obraz serwujący budowany
+  z `--no-default-groups` — lokalnie **3,19 GB → 2,49 GB** (`docker image inspect`: 3 185 001 276 →
+  2 493 569 815 B), smoke `[OK]`, w obrazie brak pandas/mlflow/optuna. Ten sam Dockerfile ma drugi cel
+  `train` (środowisko treningowo-analityczne na CPU, 4,74 GB lokalnie). Na runnerze CI (run
+  `deploy-kind` 42502188218, PR #10, 8.11): **1,71 GB wobec 2,21 GB** przed zmianą, budowa od zera
+  ok. 56 s wobec 98 s; smoke `[OK]`.
 - **kind w CI (obowiązkowe):** workflow GitHub Actions: `docker build` → `kind create cluster`
   → `kind load docker-image` → `kubectl apply` (Deployment + Service) → `kubectl rollout status`
   → **test HTTP** `/health` i `/predict` → teardown klastra. Dokumentujemy, że to klaster
@@ -800,7 +812,12 @@ i miejsca, w których projekt je realizuje:
     zero-shot 4,5B (PR #4) i ultra na H100 (PR #5), opis kalibracji (PR #6), GIF, Space na
     Hugging Face i `docs/PITCH.md` (PR #7)
   - [x] Tag `v1.0-submission` — oznacza tę wersję kodu i README (31.10)
-  - [ ] Wysyłka do prowadzącego (pn 2.11)
+  - [x] Wysyłka do prowadzącego (pn 2.11); feedback otrzymany 8.11
+- [x] **Poprawki po feedbacku prowadzącego (8.11.2026)** — jedyna uwaga techniczna: obraz serwujący
+  zawierał zależności treningowe. Zrobione: grupa `train` w `pyproject.toml`, obraz inferencji bez niej
+  (3,19 → 2,49 GB lokalnie; na runnerze CI 2,21 → 1,71 GB, budowa 98 → ok. 56 s), cel `train`
+  w Dockerfile, `scripts/` w kontekście budowy; 319 testów i lint zielone, smoke kontenera `[OK]`,
+  `deploy-kind` zielony na PR #10. Wersja wysłana pozostaje pod tagiem `v1.0-submission`.
   - Co nie zadziałało: plan zakładał wysyłkę 31.10, ale dodatki po głównym badaniu (Basal,
     kalibracja, demo online) przesunęły ją na 2.11. Model Basal 11B FP8 odpadł technicznie
     (tryby z grafami CUDA na Windows), a Space Docker na Hugging Face wymaga konta PRO.
@@ -1290,8 +1307,9 @@ Bez dalszego strojenia po teście i bez dowodu trwałej przewagi nad kNN.
 - Problemy środowiska i usług zabierały czas: zależności, zmiany API bibliotek, porty Windows,
   limity Groq i brak ról konta w GCP. Wcześniej sprawdziłbym wymagania, uprawnienia i limity
   krótkim przebiegiem. Dla LLM także to, czy budżet tokenów wystarcza na niepustą odpowiedź.
-- Obraz CPU zawierał zależności treningu i analizy. Następnym razem wcześniej oddzieliłbym
-  środowisko serwowania, a własną próbę z README na świeżym klonie zrobiłbym zaraz
+- Obraz CPU zawierał zależności treningu i analizy (poprawione 8.11.2026 po feedbacku
+  prowadzącego: grupa `train`, obraz 3,19 → 2,49 GB). Następnym razem oddzieliłbym
+  środowisko serwowania od razu, a własną próbę z README na świeżym klonie zrobiłbym zaraz
   po pierwszym działającym wdrożeniu, nie dopiero 21–22.10. Pozwoliłoby to wcześniej
   wykryć brakujące kroki instrukcji.
 
