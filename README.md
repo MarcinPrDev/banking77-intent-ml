@@ -570,8 +570,9 @@ jeśli na starcie W4 nie ma obrazu, wdrażamy baseline TF-IDF, nie czekamy na le
   `uv sync` instaluje ją domyślnie, więc komendy lokalne i CI bez zmian); obraz serwujący budowany
   z `--no-default-groups` — lokalnie **3,19 GB → 2,49 GB** (`docker image inspect`: 3 185 001 276 →
   2 493 569 815 B), smoke `[OK]`, w obrazie brak pandas/mlflow/optuna. Ten sam Dockerfile ma drugi cel
-  `train` (środowisko treningowo-analityczne na CPU, 4,74 GB lokalnie). Rozmiar na runnerze CI —
-  do odczytu z pierwszego runu `deploy-kind` po tej zmianie.
+  `train` (środowisko treningowo-analityczne na CPU, 4,74 GB lokalnie). Na runnerze CI (run
+  `deploy-kind` 42502188218, PR #10, 8.11): **1,71 GB wobec 2,21 GB** przed zmianą, budowa od zera
+  ok. 56 s wobec 98 s; smoke `[OK]`.
 - **kind w CI (obowiązkowe):** workflow GitHub Actions: `docker build` → `kind create cluster`
   → `kind load docker-image` → `kubectl apply` (Deployment + Service) → `kubectl rollout status`
   → **test HTTP** `/health` i `/predict` → teardown klastra. Dokumentujemy, że to klaster
@@ -814,8 +815,9 @@ i miejsca, w których projekt je realizuje:
   - [x] Wysyłka do prowadzącego (pn 2.11); feedback otrzymany 8.11
 - [x] **Poprawki po feedbacku prowadzącego (8.11.2026)** — jedyna uwaga techniczna: obraz serwujący
   zawierał zależności treningowe. Zrobione: grupa `train` w `pyproject.toml`, obraz inferencji bez niej
-  (3,19 → 2,49 GB lokalnie), cel `train` w Dockerfile, `scripts/` w kontekście budowy; 319 testów
-  i lint zielone, smoke kontenera `[OK]`. Wersja wysłana pozostaje pod tagiem `v1.0-submission`.
+  (3,19 → 2,49 GB lokalnie; na runnerze CI 2,21 → 1,71 GB, budowa 98 → ok. 56 s), cel `train`
+  w Dockerfile, `scripts/` w kontekście budowy; 319 testów i lint zielone, smoke kontenera `[OK]`,
+  `deploy-kind` zielony na PR #10. Wersja wysłana pozostaje pod tagiem `v1.0-submission`.
   - Co nie zadziałało: plan zakładał wysyłkę 31.10, ale dodatki po głównym badaniu (Basal,
     kalibracja, demo online) przesunęły ją na 2.11. Model Basal 11B FP8 odpadł technicznie
     (tryby z grafami CUDA na Windows), a Space Docker na Hugging Face wymaga konta PRO.
